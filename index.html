@@ -296,7 +296,8 @@
 <script>
 /* ── 설정 ── */
 const CFG_KEY='archynotes_cfg';
-function getCfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY)||'{}')}catch(e){return{}}}
+const DEFAULT_GOOGLE_CLIENT_ID='185136649723-k5oqmsai651am1voql340hd7ou6r7ska.apps.googleusercontent.com';
+function getCfg(){try{const c=JSON.parse(localStorage.getItem(CFG_KEY)||'{}');if(!c.googleClientId)c.googleClientId=DEFAULT_GOOGLE_CLIENT_ID;return c}catch(e){return{googleClientId:DEFAULT_GOOGLE_CLIENT_ID}}}
 function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c))}
 
 /* ── IndexedDB ── */
