@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>아키노트 - AI 회의록</title>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#7c3aed">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="아키노트">
+  <style>
+    :root{--p:#7c3aed;--p2:#f5f3ff;--p3:#ede9fe;--ink:#1e1b4b;--muted:#6b7280;--line:#e5e7eb;--bg:#f9fafb;--white:#fff;--red:#ef4444;--green:#22c55e;--shadow:0 4px 24px rgba(124,58,237,.12)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Pretendard,"Noto Sans KR",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.5}
+    button,input,textarea,select{font:inherit}button{cursor:pointer}
+    .app{min-height:100vh;padding-bottom:68px}
+
+    /* Topbar */
+    .topbar{height:58px;background:var(--white);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 18px;position:sticky;top:0;z-index:20}
+    .topbar-title{font-size:17px;font-weight:800;color:var(--p)}
+    .topbar-back{border:none;background:none;font-size:26px;color:var(--p);padding:4px 10px 4px 0;font-weight:700;line-height:1}
+
+    /* Bottom nav */
+    .bnav{position:fixed;bottom:0;left:0;right:0;height:64px;background:var(--white);border-top:1px solid var(--line);display:flex;z-index:20}
+    .bnav-btn{flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:600;color:var(--muted);padding:6px 4px}
+    .bnav-btn .ni{font-size:22px}.bnav-btn.active{color:var(--p)}
+
+    /* Screens */
+    .screen{display:none}.screen.active{display:block}
+    .content{padding:18px 16px}
+
+    /* Cards */
+    .card{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:12px}
+
+    /* Buttons */
+    .btn{border:1px solid var(--line);background:var(--white);color:var(--ink);padding:10px 16px;border-radius:10px;font-weight:700;font-size:14px}
+    .btn.primary{background:var(--p);border-color:var(--p);color:var(--white)}
+    .btn.danger{border-color:#fca5a5;color:var(--red)}
+    .btn.full{width:100%;text-align:center;display:block;margin-bottom:10px}
+    .btn.sm{padding:6px 12px;font-size:12px;border-radius:8px}
+    .btn.ghost{border-color:var(--p);color:var(--p);background:var(--p2)}
+
+    /* Search */
+    .search-wrap{position:relative;margin-bottom:14px}
+    .search-input{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 16px 11px 40px;font-size:14px;outline:none;background:var(--white)}
+    .search-input:focus{border-color:var(--p)}
+    .search-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:16px;color:var(--muted)}
+
+    /* Meeting list */
+    .meeting-item{display:flex;align-items:flex-start;gap:13px;padding:14px 16px;background:var(--white);border:1px solid var(--line);border-radius:14px;margin-bottom:10px;cursor:pointer;transition:.15s}
+    .meeting-item:hover{border-color:var(--p)}
+    .m-icon{width:44px;height:44px;border-radius:12px;background:var(--p3);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+    .m-meta{flex:1;min-width:0}
+    .m-title{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+    .m-date{font-size:12px;color:var(--muted);margin-bottom:5px}
+    .m-badges{display:flex;gap:5px;flex-wrap:wrap}
+    .badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px}
+    .badge.done{background:#dcfce7;color:#16a34a}.badge.pending{background:#fef3c7;color:#d97706}.badge.none{background:var(--line);color:var(--muted)}.badge.err{background:#fee2e2;color:var(--red)}
+
+    /* Record */
+    .rec-center{text-align:center;padding:24px 20px 16px}
+    .rec-timer{font-size:52px;font-weight:800;letter-spacing:-2px;color:var(--p);margin:12px 0 6px;font-variant-numeric:tabular-nums}
+    .rec-status{font-size:13px;color:var(--muted);margin-bottom:24px}
+    .rec-btns{display:flex;align-items:center;justify-content:center;gap:22px;margin-bottom:20px}
+    .rbtn{border:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:.15s}
+    .rbtn.main{width:76px;height:76px;background:var(--p);font-size:30px;box-shadow:0 8px 24px rgba(124,58,237,.35)}
+    .rbtn.main.recording{background:var(--red);box-shadow:0 8px 24px rgba(239,68,68,.35)}
+    .rbtn.main.paused{background:var(--green)}
+    .rbtn.side{width:50px;height:50px;background:var(--white);border:2px solid var(--line);font-size:20px}
+    .rbtn.side:disabled{opacity:.3;cursor:default}
+    .viz{height:44px;display:flex;align-items:center;justify-content:center;gap:3px;margin-bottom:16px}
+    .vbar{width:3px;border-radius:2px;background:var(--p);transition:height .1s}
+
+    /* Upload */
+    .upload-zone{border:2px dashed #c4b5fd;border-radius:14px;padding:28px 20px;text-align:center;background:var(--p2);cursor:pointer;transition:.2s}
+    .upload-zone:hover,.upload-zone.drag{background:var(--p3);border-color:var(--p)}
+    .upload-zone input{display:none}
+    .upload-zone label{color:var(--p);cursor:pointer;font-weight:700}
+
+    /* Fields */
+    .field{margin-bottom:13px}
+    .field label{display:block;font-size:12px;font-weight:700;color:var(--muted);margin-bottom:4px}
+    .field input,.field textarea,.field select{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;outline:none}
+    .field input:focus,.field textarea:focus,.field select:focus{border-color:var(--p)}
+    .field textarea{resize:vertical;min-height:64px}
+
+    /* Tabs */
+    .tabs{display:flex;border-bottom:2px solid var(--line);overflow-x:auto;-ms-overflow-style:none;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab-item{border:none;background:none;padding:11px 15px;font-size:13px;font-weight:700;color:var(--muted);white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer}
+    .tab-item.active{color:var(--p);border-bottom-color:var(--p)}
+    .tab-pane{display:none;padding:16px}
+    .tab-pane.active{display:block}
+
+    /* Summary */
+    .sum-section{margin-bottom:18px}
+    .sum-title{font-size:13px;font-weight:800;color:var(--p);margin-bottom:7px}
+    .sum-text{font-size:14px;line-height:1.75;white-space:pre-wrap;color:var(--ink)}
+    .sum-list{list-style:none;padding:0;margin:0}
+    .sum-list li{font-size:14px;line-height:1.65;padding:4px 0 4px 16px;position:relative}
+    .sum-list li::before{content:"•";position:absolute;left:0;color:var(--p)}
+
+    /* Action items */
+    .action-item{display:flex;align-items:flex-start;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--white)}
+    .action-check{width:18px;height:18px;accent-color:var(--p);flex-shrink:0;margin-top:2px;cursor:pointer}
+    .action-text{flex:1;font-size:14px}
+    .action-meta{font-size:12px;color:var(--muted);margin-top:3px}
+
+    /* Cal items */
+    .cal-item{padding:12px 14px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--white)}
+    .cal-title{font-size:14px;font-weight:700;margin-bottom:3px}
+    .cal-time{font-size:12px;color:var(--muted);margin-bottom:8px}
+    .cal-quote{font-size:12px;color:var(--muted);font-style:italic;margin-bottom:8px}
+
+    /* Transcript */
+    .seg{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #f3f4f6}
+    .seg:last-child{border-bottom:none}
+    .seg-meta{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:3px}
+    .seg-text{font-size:14px;line-height:1.65}
+
+    /* Loading */
+    .loading{text-align:center;padding:48px 20px}
+    .spinner{width:38px;height:38px;border:3px solid var(--line);border-top-color:var(--p);border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 14px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Toast */
+    .toast{position:fixed;bottom:74px;left:14px;right:14px;background:#1e1b4b;color:var(--white);border-radius:12px;padding:12px 16px;font-size:13px;font-weight:500;opacity:0;transform:translateY(8px);transition:.25s;z-index:100;text-align:center}
+    .toast.show{opacity:1;transform:none}
+
+    /* Empty */
+    .empty{text-align:center;padding:56px 20px;color:var(--muted)}
+    .empty-icon{font-size:44px;margin-bottom:12px}
+    .empty-title{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:5px}
+    .empty-sub{font-size:13px}
+
+    /* Settings */
+    .sg{margin-bottom:22px}
+    .sg-label{font-size:11px;font-weight:800;color:var(--p);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;padding-left:4px}
+    .srow{background:var(--white);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:8px}
+    .srow-title{font-size:14px;font-weight:700;margin-bottom:3px}
+    .srow-desc{font-size:12px;color:var(--muted)}
+    .srow input{width:100%;border:1px solid var(--line);border-radius:8px;padding:9px 12px;font-size:13px;outline:none;margin-top:8px}
+    .srow input:focus{border-color:var(--p)}
+
+    /* audio */
+    audio{width:100%;border-radius:10px;accent-color:var(--p)}
+
+    /* Divider */
+    .divider{display:flex;align-items:center;gap:10px;margin:14px 0;font-size:12px;color:var(--muted)}
+    .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+
+    @media(max-width:380px){.rec-timer{font-size:42px}.rbtn.main{width:68px;height:68px}}
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 홈 화면 -->
+  <div id="homeScreen" class="screen active">
+    <div class="topbar">
+      <div class="topbar-title">🎙️ 아키노트</div>
+      <button class="btn sm" id="homeSettingsBtn">⚙️</button>
+    </div>
+    <div class="content">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput" type="text" placeholder="회의, 결정사항, 할 일 검색...">
+      </div>
+      <div id="meetingList"></div>
+    </div>
+  </div>
+
+  <!-- 녹음 화면 -->
+  <div id="recordScreen" class="screen">
+    <div class="topbar">
+      <div class="topbar-title">새 회의</div>
+      <button class="btn sm primary" id="saveRecBtn" disabled>완료</button>
+    </div>
+    <div class="content">
+      <div class="field">
+        <label>회의 제목</label>
+        <input id="meetTitleInput" type="text" placeholder="예: 7월 팀 미팅">
+      </div>
+      <div class="field">
+        <label>메모</label>
+        <textarea id="meetMemoInput" placeholder="간단한 메모..."></textarea>
+      </div>
+    </div>
+    <div class="rec-center">
+      <div class="viz" id="viz"></div>
+      <div class="rec-timer" id="recTimer">00:00</div>
+      <div class="rec-status" id="recStatus">버튼을 눌러 녹음을 시작하세요</div>
+      <div class="rec-btns">
+        <button class="rbtn side" id="pauseBtn" disabled>⏸️</button>
+        <button class="rbtn main" id="recMainBtn">🎙️</button>
+        <button class="rbtn side" id="stopBtn" disabled>⏹️</button>
+      </div>
+    </div>
+    <div class="content">
+      <div class="divider">또는 파일 업로드</div>
+      <div class="upload-zone" id="uploadZone">
+        <div style="font-size:32px;margin-bottom:8px">📁</div>
+        <div style="font-size:14px;font-weight:600">파일을 끌어다 놓거나<br><label for="audioFileInput">클릭해서 선택</label></div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">mp3, m4a, wav, ogg, webm 지원</div>
+        <input id="audioFileInput" type="file" accept="audio/*">
+      </div>
+    </div>
+  </div>
+
+  <!-- 상세 화면 -->
+  <div id="detailScreen" class="screen">
+    <div class="topbar">
+      <button class="topbar-back" id="backBtn">‹</button>
+      <div class="topbar-title" id="detailTitle" style="font-size:14px;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">회의 상세</div>
+      <button class="btn sm danger" id="deleteBtn">삭제</button>
+    </div>
+    <div class="tabs" id="detailTabs">
+      <button class="tab-item active" data-tab="Summary">📋 요약</button>
+      <button class="tab-item" data-tab="Transcript">📄 전사본</button>
+      <button class="tab-item" data-tab="Audio">🔊 녹음</button>
+      <button class="tab-item" data-tab="Actions">✅ 할 일</button>
+      <button class="tab-item" data-tab="Schedule">📅 일정</button>
+      <button class="tab-item" data-tab="Share">📤 공유</button>
+    </div>
+    <div id="tabSummary" class="tab-pane active"></div>
+    <div id="tabTranscript" class="tab-pane"></div>
+    <div id="tabAudio" class="tab-pane"></div>
+    <div id="tabActions" class="tab-pane"></div>
+    <div id="tabSchedule" class="tab-pane"></div>
+    <div id="tabShare" class="tab-pane"></div>
+  </div>
+
+  <!-- 검색 화면 -->
+  <div id="searchScreen" class="screen">
+    <div class="topbar"><div class="topbar-title">🔍 검색</div></div>
+    <div class="content">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="searchInput2" type="text" placeholder="회의, 결정사항, 할 일...">
+      </div>
+      <div id="searchResults"><div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">검색어를 입력하세요</div></div></div>
+    </div>
+  </div>
+
+  <!-- 설정 화면 -->
+  <div id="settingsScreen" class="screen">
+    <div class="topbar"><div class="topbar-title">⚙️ 설정</div></div>
+    <div class="content">
+      <div class="sg">
+        <div class="sg-label">AI 전사 · 요약</div>
+        <div class="srow">
+          <div class="srow-title">Groq API 키</div>
+          <div class="srow-desc">console.groq.com에서 무료 발급 · 하루 2시간 녹음 무료</div>
+          <input type="password" id="groqKeyInput" placeholder="gsk_xxxxxxxxxxxx" autocomplete="off">
+        </div>
+      </div>
+      <div class="sg">
+        <div class="sg-label">Notion 자동 저장</div>
+        <div class="srow">
+          <div class="srow-title">Make.com 웹훅 URL</div>
+          <div class="srow-desc">Make.com에서 시나리오 설정 후 웹훅 URL 입력 → 요약 완료 시 자동으로 노션에 저장</div>
+          <input type="url" id="webhookInput" placeholder="https://hook.eu2.make.com/...">
+        </div>
+      </div>
+      <button class="btn primary full" id="saveSettingsBtn" style="margin-bottom:14px">저장</button>
+      <div style="padding:13px;background:#fef3c7;border-radius:12px;font-size:12px;color:#92400e;line-height:1.6">
+        ⚠️ 녹음 파일과 데이터는 이 기기에만 저장돼요. 브라우저 데이터를 삭제하면 사라질 수 있어요.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 하단 네비게이션 -->
+<nav class="bnav">
+  <button class="bnav-btn active" data-screen="homeScreen"><span class="ni">🏠</span><span>홈</span></button>
+  <button class="bnav-btn" data-screen="recordScreen"><span class="ni">🎙️</span><span>녹음</span></button>
+  <button class="bnav-btn" data-screen="searchScreen"><span class="ni">🔍</span><span>검색</span></button>
+  <button class="bnav-btn" data-screen="settingsScreen"><span class="ni">⚙️</span><span>설정</span></button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── 설정 ── */
+const CFG_KEY='archynotes_cfg';
+function getCfg(){try{return JSON.parse(localStorage.getItem(CFG_KEY)||'{}')}catch(e){return{}}}
+function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c))}
+
+/* ── IndexedDB ── */
+let db;
+function openDB(){
+  return new Promise((res,rej)=>{
+    const req=indexedDB.open('archynotes',1);
+    req.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains('meetings')){const s=d.createObjectStore('meetings',{keyPath:'id'});s.createIndex('date','createdAt')}
+      if(!d.objectStoreNames.contains('audio'))d.createObjectStore('audio',{keyPath:'meetingId'});
+      if(!d.objectStoreNames.contains('transcripts'))d.createObjectStore('transcripts',{keyPath:'meetingId'});
+      if(!d.objectStoreNames.contains('summaries'))d.createObjectStore('summaries',{keyPath:'meetingId'});
+    };
+    req.onsuccess=e=>{db=e.target.result;res(db)};
+    req.onerror=()=>rej(req.error);
+  });
+}
+function dbGet(s,k){return new Promise((r,j)=>{const req=db.transaction(s).objectStore(s).get(k);req.onsuccess=()=>r(req.result);req.onerror=()=>j(req.error)})}
+function dbPut(s,v){return new Promise((r,j)=>{const req=db.transaction(s,'readwrite').objectStore(s).put(v);req.onsuccess=()=>r(req.result);req.onerror=()=>j(req.error)})}
+function dbDel(s,k){return new Promise((r,j)=>{const req=db.transaction(s,'readwrite').objectStore(s).delete(k);req.onsuccess=()=>r();req.onerror=()=>j(req.error)})}
+function dbAll(s){return new Promise((r,j)=>{const req=db.transaction(s).objectStore(s).getAll();req.onsuccess=()=>r(req.result);req.onerror=()=>j(req.error)})}
+
+/* ── 유틸 ── */
+function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function toast(m,d=3000){const el=document.getElementById('toast');el.textContent=m;el.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('show'),d)}
+function fmtDur(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);return h?`${h}:${p(m)}:${p(ss)}`:`${p(m)}:${p(ss)}`}
+function p(n){return String(n).padStart(2,'0')}
+function fmtDate(ts){const d=new Date(ts);return`${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}. ${'일월화수목금토'[d.getDay()]}요일`}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+
+/* ── 네비게이션 ── */
+let curScreen='homeScreen', curMeetingId=null;
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.toggle('active',b.dataset.screen===id));
+  curScreen=id;
+  if(id==='homeScreen')renderHome();
+  if(id==='searchScreen')document.getElementById('searchInput2').focus();
+}
+document.querySelectorAll('.bnav-btn').forEach(b=>b.onclick=()=>b.dataset.screen&&showScreen(b.dataset.screen));
+document.getElementById('homeSettingsBtn').onclick=()=>showScreen('settingsScreen');
+document.getElementById('backBtn').onclick=()=>showScreen('homeScreen');
+
+/* ── 홈 ── */
+async function renderHome(){
+  const meetings=await dbAll('meetings');
+  meetings.sort((a,b)=>b.createdAt-a.createdAt);
+  const el=document.getElementById('meetingList');
+  if(!meetings.length){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">🎙️</div><div class="empty-title">회의 기록이 없어요</div><div class="empty-sub">아래 녹음 버튼으로 시작하세요</div></div>`;return;
+  }
+  el.innerHTML=meetings.map(m=>`
+    <div class="meeting-item" data-id="${m.id}">
+      <div class="m-icon">🎙️</div>
+      <div class="m-meta">
+        <div class="m-title">${esc(m.title)}</div>
+        <div class="m-date">${fmtDate(m.createdAt)} · ${fmtDur(m.duration||0)}</div>
+        <div class="m-badges">
+          <span class="badge ${m.transcriptStatus==='done'?'done':m.transcriptStatus==='processing'?'pending':m.transcriptStatus==='error'?'err':'none'}">전사 ${m.transcriptStatus==='done'?'✓':m.transcriptStatus==='processing'?'중...':m.transcriptStatus==='error'?'오류':'—'}</span>
+          <span class="badge ${m.summaryStatus==='done'?'done':m.summaryStatus==='processing'?'pending':m.summaryStatus==='error'?'err':'none'}">요약 ${m.summaryStatus==='done'?'✓':m.summaryStatus==='processing'?'중...':m.summaryStatus==='error'?'오류':'—'}</span>
+        </div>
+      </div>
+    </div>`).join('');
+  el.querySelectorAll('.meeting-item').forEach(el=>el.onclick=()=>openMeeting(el.dataset.id));
+}
+
+/* ── 검색 ── */
+async function doSearch(q){
+  const el=document.getElementById('searchResults');
+  if(!q.trim()){el.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">검색어를 입력하세요</div></div>';return}
+  const [meetings,summaries,transcripts]=await Promise.all([dbAll('meetings'),dbAll('summaries'),dbAll('transcripts')]);
+  const ql=q.toLowerCase();
+  const results=[];
+  for(const m of meetings){
+    const s=summaries.find(x=>x.meetingId===m.id);
+    const txt=[m.title,m.memo,s?.fullSummary,s?.decisions?.join(' '),s?.actionItems?.map(a=>typeof a==='string'?a:a.text).join(' '),s?.keywords?.join(' ')].filter(Boolean).join(' ').toLowerCase();
+    if(txt.includes(ql)){
+      const idx=txt.indexOf(ql),st=Math.max(0,idx-30),en=Math.min(txt.length,idx+ql.length+30);
+      results.push({m,snippet:'...'+txt.slice(st,en)+'...'});
+    }
+  }
+  if(!results.length){el.innerHTML=`<div class="empty"><div class="empty-icon">🔍</div><div class="empty-title">"${esc(q)}" 결과 없음</div></div>`;return}
+  el.innerHTML=results.map(r=>`<div class="meeting-item" data-id="${r.m.id}"><div class="m-icon">📄</div><div class="m-meta"><div class="m-title">${esc(r.m.title)}</div><div class="m-date">${fmtDate(r.m.createdAt)}</div><div style="font-size:12px;color:var(--muted);margin-top:3px">${esc(r.snippet)}</div></div></div>`).join('');
+  el.querySelectorAll('.meeting-item').forEach(el=>el.onclick=()=>openMeeting(el.dataset.id));
+}
+document.getElementById('searchInput').oninput=e=>doSearch(e.target.value);
+document.getElementById('searchInput2').oninput=e=>doSearch(e.target.value);
+
+/* ── 녹음 ── */
+let mediaRec,chunks=[],recState='idle',timerInt,recSecs=0,audioCtx,analyser,vizBars=[],vizInt;
+
+function setupViz(){
+  const v=document.getElementById('viz');v.innerHTML='';
+  vizBars=Array.from({length:20},()=>{const b=document.createElement('div');b.className='vbar';b.style.height='4px';v.appendChild(b);return b});
+}
+function startViz(stream){
+  try{
+    audioCtx=new AudioContext();
+    const src=audioCtx.createMediaStreamSource(stream);
+    analyser=audioCtx.createAnalyser();analyser.fftSize=64;src.connect(analyser);
+    const data=new Uint8Array(analyser.frequencyBinCount);
+    vizInt=setInterval(()=>{analyser.getByteFrequencyData(data);vizBars.forEach((b,i)=>{b.style.height=Math.max(4,(data[i]||0)/255*40)+'px';b.style.opacity=recState==='paused'?'0.3':'1'})},80);
+  }catch(e){}
+}
+function stopViz(){clearInterval(vizInt);vizBars.forEach(b=>b.style.height='4px');try{audioCtx?.close()}catch(e){}}
+
+async function startRec(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    chunks=[];
+    const mime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':'audio/webm';
+    mediaRec=new MediaRecorder(stream,{mimeType:mime});
+    mediaRec.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data)};
+    mediaRec.start(1000);recState='recording';
+    startViz(stream);
+    recSecs=0;timerInt=setInterval(()=>{recSecs++;document.getElementById('recTimer').textContent=fmtDur(recSecs)},1000);
+    updateRecUI();document.getElementById('saveRecBtn').disabled=false;
+    try{await navigator.wakeLock?.request('screen')}catch(e){}
+  }catch(e){toast('마이크 권한이 필요해요. 브라우저 설정에서 허용해주세요.')}
+}
+function pauseRec(){
+  if(recState==='recording'){mediaRec.pause();clearInterval(timerInt);recState='paused'}
+  else if(recState==='paused'){mediaRec.resume();timerInt=setInterval(()=>{recSecs++;document.getElementById('recTimer').textContent=fmtDur(recSecs)},1000);recState='recording'}
+  updateRecUI();
+}
+function stopRec(){
+  return new Promise(r=>{
+    mediaRec.onstop=()=>{r(new Blob(chunks,{type:mediaRec.mimeType}))};
+    mediaRec.stop();mediaRec.stream.getTracks().forEach(t=>t.stop());
+    clearInterval(timerInt);stopViz();recState='idle';updateRecUI();
+  });
+}
+function updateRecUI(){
+  const main=document.getElementById('recMainBtn'),pause=document.getElementById('pauseBtn'),stop=document.getElementById('stopBtn'),status=document.getElementById('recStatus');
+  if(recState==='recording'){main.textContent='⏸️';main.className='rbtn main recording';pause.disabled=false;stop.disabled=false;status.textContent='녹음 중... (일시정지 가능)'}
+  else if(recState==='paused'){main.textContent='▶️';main.className='rbtn main paused';status.textContent='일시정지됨. 다시 누르면 재개'}
+  else{main.textContent='🎙️';main.className='rbtn main';pause.disabled=true;stop.disabled=true;status.textContent='버튼을 눌러 녹음을 시작하세요'}
+}
+document.getElementById('recMainBtn').onclick=()=>recState==='idle'?startRec():pauseRec();
+document.getElementById('pauseBtn').onclick=pauseRec;
+document.getElementById('stopBtn').onclick=()=>saveMeeting();
+document.getElementById('saveRecBtn').onclick=()=>saveMeeting();
+
+async function saveMeeting(blob=null){
+  if(!blob)blob=await stopRec();
+  const title=document.getElementById('meetTitleInput').value.trim()||`회의 ${new Date().toLocaleDateString('ko-KR')}`;
+  const memo=document.getElementById('meetMemoInput').value.trim();
+  const meeting={id:genId(),title,memo,createdAt:Date.now(),duration:recSecs,mimeType:blob.type,transcriptStatus:'none',summaryStatus:'none'};
+  await dbPut('meetings',meeting);
+  await dbPut('audio',{meetingId:meeting.id,blob,mimeType:blob.type});
+  document.getElementById('meetTitleInput').value='';document.getElementById('meetMemoInput').value='';
+  document.getElementById('recTimer').textContent='00:00';document.getElementById('saveRecBtn').disabled=true;recSecs=0;
+  toast('저장됐어요! AI 전사를 시작할게요 🎉');
+  showScreen('homeScreen');openMeeting(meeting.id);startTranscription(meeting.id);
+}
+
+const audioFileInput=document.getElementById('audioFileInput'),uploadZone=document.getElementById('uploadZone');
+audioFileInput.onchange=async e=>{const f=e.target.files[0];if(!f)return;recSecs=0;await saveMeeting(f);audioFileInput.value=''};
+uploadZone.ondragover=e=>{e.preventDefault();uploadZone.classList.add('drag')};
+uploadZone.ondragleave=()=>uploadZone.classList.remove('drag');
+uploadZone.ondrop=async e=>{e.preventDefault();uploadZone.classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.type.startsWith('audio/')){recSecs=0;await saveMeeting(f)}};
+
+/* ── Groq API ── */
+async function groqTranscribe(blob,mimeType){
+  const cfg=getCfg();if(!cfg.groqKey)throw new Error('설정에서 Groq API 키를 입력해주세요.');
+  const fd=new FormData();
+  const extMap={'webm':'webm','ogg':'ogg','mp4':'mp4','m4a':'m4a','wav':'wav','mpeg':'mp3','mp3':'mp3'};
+  const ext=Object.keys(extMap).find(k=>mimeType.includes(k))||'webm';
+  fd.append('file',new File([blob],`recording.${ext}`,{type:mimeType}));
+  fd.append('model','whisper-large-v3-turbo');
+  fd.append('response_format','verbose_json');
+  fd.append('language','ko');
+  fd.append('timestamp_granularities[]','segment');
+  const res=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${cfg.groqKey}`},body:fd});
+  if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`전사 실패 (${res.status})`)}
+  return await res.json();
+}
+
+async function groqSummarize(text){
+  const cfg=getCfg();if(!cfg.groqKey)throw new Error('Groq API 키가 필요해요.');
+  const prompt=`다음 회의 전사본을 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트는 절대 포함하지 마.
+
+전사본:
+${text}
+
+JSON 형식:
+{
+  "fullSummary": "전체 요약 (3-5문장)",
+  "discussions": ["주요 논의 내용1", "주요 논의 내용2"],
+  "decisions": ["결정사항1", "결정사항2"],
+  "actionItems": [{"text": "할 일", "assignee": "담당자 (없으면 빈문자열)", "deadline": "마감일 (없으면 빈문자열)"}],
+  "schedules": [{"title": "일정 제목", "date": "날짜", "time": "시간 (없으면 빈문자열)", "attendees": "참석자 (없으면 빈문자열)", "originalText": "원문 발언"}],
+  "issues": ["미해결 이슈1"],
+  "flagged": ["말이 바뀌거나 확인이 필요한 중요 발언1"],
+  "keywords": ["키워드1", "키워드2", "키워드3"]
+}
+
+주의: 없는 내용은 추측하지 말고 빈 배열([])로 두세요. 날짜·시간은 원문 기준으로만 적으세요.`;
+  const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${cfg.groqKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],temperature:0.2,response_format:{type:'json_object'}})});
+  if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`요약 실패 (${res.status})`)}
+  const data=await res.json();
+  return JSON.parse(data.choices[0].message.content);
+}
+
+/* ── 전사 & 요약 ── */
+async function startTranscription(meetingId){
+  const meeting=await dbGet('meetings',meetingId);
+  const audioData=await dbGet('audio',meetingId);
+  if(!meeting||!audioData)return;
+  const cfg=getCfg();
+  if(!cfg.groqKey){toast('⚠️ 설정에서 Groq API 키를 입력해야 전사가 가능해요.');return}
+  meeting.transcriptStatus='processing';await dbPut('meetings',meeting);
+  if(curMeetingId===meetingId)renderDetailTabs(meeting);renderHome();
+  try{
+    const result=await groqTranscribe(audioData.blob,audioData.mimeType||'audio/webm');
+    const transcript={meetingId,text:result.text,segments:(result.segments||[]).map(s=>({start:s.start,end:s.end,text:s.text,speaker:s.speaker||''}))};
+    await dbPut('transcripts',transcript);
+    meeting.transcriptStatus='done';meeting.duration=Math.round(result.duration||meeting.duration||0);
+    await dbPut('meetings',meeting);
+    if(curMeetingId===meetingId){renderDetailTabs(meeting);toast('전사 완료! 요약 시작 중...')}
+    renderHome();await startSummarization(meetingId,result.text);
+  }catch(e){meeting.transcriptStatus='error';await dbPut('meetings',meeting);toast(`전사 실패: ${e.message}`);if(curMeetingId===meetingId)renderDetailTabs(meeting);renderHome()}
+}
+
+async function startSummarization(meetingId,transcriptText){
+  const meeting=await dbGet('meetings',meetingId);if(!meeting)return;
+  meeting.summaryStatus='processing';await dbPut('meetings',meeting);
+  if(curMeetingId===meetingId)renderDetailTabs(meeting);renderHome();
+  try{
+    const summary=await groqSummarize(transcriptText);
+    summary.meetingId=meetingId;await dbPut('summaries',summary);
+    meeting.summaryStatus='done';await dbPut('meetings',meeting);
+    if(curMeetingId===meetingId){renderDetailTabs(meeting);toast('요약 완료! 📋')}
+    renderHome();
+    const cfg=getCfg();
+    if(cfg.webhookUrl){
+      fetch(cfg.webhookUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meeting:{title:meeting.title,date:fmtDate(meeting.createdAt),duration:fmtDur(meeting.duration||0)},summary})})
+        .then(()=>toast('노션에 자동 저장됐어요! 📓')).catch(()=>{});
+    }
+  }catch(e){meeting.summaryStatus='error';await dbPut('meetings',meeting);toast(`요약 실패: ${e.message}`);if(curMeetingId===meetingId)renderDetailTabs(meeting);renderHome()}
+}
+
+/* ── 회의 상세 ── */
+async function openMeeting(id){
+  curMeetingId=id;
+  const meeting=await dbGet('meetings',id);if(!meeting)return;
+  document.getElementById('detailTitle').textContent=meeting.title;
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.toggle('active',t.dataset.tab==='Summary'));
+  document.querySelectorAll('.tab-pane').forEach(p=>p.classList.toggle('active',p.id==='tabSummary'));
+  await renderDetailTabs(meeting);showScreen('detailScreen');
+}
+async function renderDetailTabs(meeting){
+  const [tr,sum,audio]=await Promise.all([dbGet('transcripts',meeting.id),dbGet('summaries',meeting.id),dbGet('audio',meeting.id)]);
+  renderTabSummary(meeting,sum);renderTabTranscript(meeting,tr);renderTabAudio(meeting,audio);renderTabActions(meeting,sum);renderTabSchedule(meeting,sum);renderTabShare(meeting,tr,sum);
+}
+
+function renderTabSummary(m,sum){
+  const el=document.getElementById('tabSummary');
+  if(m.transcriptStatus==='processing'||m.summaryStatus==='processing'){
+    el.innerHTML=`<div class="loading"><div class="spinner"></div><div style="font-size:14px;font-weight:700;color:var(--p)">${m.transcriptStatus==='processing'?'AI가 전사 중이에요...':'AI가 요약 중이에요...'}</div><div style="font-size:12px;color:var(--muted);margin-top:6px">잠시만 기다려주세요 (30초~2분)</div></div>`;return;
+  }
+  if(m.transcriptStatus==='error'||m.summaryStatus==='error'){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">⚠️</div><div class="empty-title">처리 중 오류가 발생했어요</div><div class="empty-sub">API 키를 확인 후 다시 시도해주세요</div><button class="btn primary" style="margin-top:16px" onclick="retryTr('${m.id}')">다시 시도</button></div>`;return;
+  }
+  if(!sum){
+    el.innerHTML=`<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">요약이 없어요</div><div class="empty-sub">설정에서 Groq API 키를 입력하면 자동 요약이 시작돼요</div><button class="btn primary" style="margin-top:16px" onclick="retryTr('${m.id}')">전사 & 요약 시작</button></div>`;return;
+  }
+  const li=arr=>Array.isArray(arr)&&arr.length?`<ul class="sum-list">${arr.map(x=>`<li>${esc(typeof x==='string'?x:x.text||JSON.stringify(x))}</li>`).join('')}</ul>`:'';
+  el.innerHTML=`
+    <div style="margin-bottom:16px;padding:12px 14px;background:var(--p2);border-radius:12px">
+      <div style="font-size:12px;color:var(--muted)">${fmtDate(m.createdAt)} · ${fmtDur(m.duration||0)}</div>
+      ${m.memo?`<div style="font-size:13px;color:var(--muted);margin-top:4px">${esc(m.memo)}</div>`:''}
+    </div>
+    ${sum.fullSummary?`<div class="sum-section"><div class="sum-title">📝 전체 요약</div><div class="sum-text">${esc(sum.fullSummary)}</div></div>`:''}
+    ${sum.discussions?.length?`<div class="sum-section"><div class="sum-title">💬 주요 논의 내용</div>${li(sum.discussions)}</div>`:''}
+    ${sum.decisions?.length?`<div class="sum-section"><div class="sum-title">✅ 결정사항</div>${li(sum.decisions)}</div>`:''}
+    ${sum.issues?.length?`<div class="sum-section"><div class="sum-title">⚠️ 미해결 이슈</div>${li(sum.issues)}</div>`:''}
+    ${sum.flagged?.length?`<div class="sum-section"><div class="sum-title">🔍 확인이 필요한 발언</div>${li(sum.flagged)}</div>`:''}
+    ${sum.keywords?.length?`<div class="sum-section"><div class="sum-title">🏷️ 핵심 키워드</div><div style="display:flex;flex-wrap:wrap;gap:6px">${sum.keywords.map(k=>`<span style="background:var(--p3);color:var(--p);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700">${esc(k)}</span>`).join('')}</div></div>`:''}`;
+}
+
+function renderTabTranscript(m,tr){
+  const el=document.getElementById('tabTranscript');
+  if(!tr){el.innerHTML=m.transcriptStatus==='processing'?`<div class="loading"><div class="spinner"></div><div style="font-size:14px;font-weight:700;color:var(--p)">전사 중...</div></div>`:`<div class="empty"><div class="empty-icon">📄</div><div class="empty-title">전사본이 없어요</div></div>`;return}
+  const segs=tr.segments||[];
+  el.innerHTML=`<div style="padding:10px 12px;background:var(--p2);border-radius:10px;font-size:12px;color:var(--p);font-weight:700;margin-bottom:14px">${segs.length?`${segs.length}개 구간`:''} · 총 ${tr.text?.length||0}자</div>`+(segs.length?segs.map(s=>`<div class="seg"><div class="seg-meta">${fmtDur(s.start)}${s.speaker?` · ${esc(s.speaker)}`:''}</div><div class="seg-text">${esc(s.text)}</div></div>`).join(''):`<div class="sum-text">${esc(tr.text||'')}</div>`);
+}
+
+function renderTabAudio(m,audio){
+  const el=document.getElementById('tabAudio');
+  if(!audio){el.innerHTML=`<div class="empty"><div class="empty-icon">🔊</div><div class="empty-title">녹음 파일이 없어요</div></div>`;return}
+  const url=URL.createObjectURL(audio.blob);
+  el.innerHTML=`<div class="card"><div style="font-size:14px;font-weight:700;margin-bottom:12px">🎵 녹음 파일</div><audio controls src="${url}" style="width:100%;border-radius:10px;accent-color:var(--p)"></audio><div style="margin-top:10px;font-size:12px;color:var(--muted)">길이: ${fmtDur(m.duration||0)}</div></div><button class="btn full" onclick="dlAudio('${m.id}','${esc(m.title)}')">⬇️ 녹음 파일 다운로드</button>`;
+}
+async function dlAudio(id,title){const a=await dbGet('audio',id);if(!a)return;const url=URL.createObjectURL(a.blob);const el=document.createElement('a');el.href=url;const ext=a.mimeType?.includes('mp4')||a.mimeType?.includes('m4a')?'m4a':a.mimeType?.includes('ogg')?'ogg':a.mimeType?.includes('wav')?'wav':'webm';el.download=`${title}.${ext}`;el.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+window.dlAudio=dlAudio;
+
+function renderTabActions(m,sum){
+  const el=document.getElementById('tabActions');
+  if(!sum?.actionItems?.length){el.innerHTML=`<div class="empty"><div class="empty-icon">✅</div><div class="empty-title">추출된 할 일이 없어요</div><div class="empty-sub">${m.summaryStatus==='done'?'이 회의에서 할 일이 언급되지 않았어요':'요약 완료 후 표시돼요'}</div></div>`;return}
+  el.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:12px">총 ${sum.actionItems.length}개의 할 일</div>`+sum.actionItems.map((item,i)=>{const it=typeof item==='string'?{text:item,assignee:'',deadline:''}:item;return`<div class="action-item"><input type="checkbox" class="action-check" id="ac_${i}"><div><div class="action-text">${esc(it.text)}</div>${it.assignee||it.deadline?`<div class="action-meta">${it.assignee?`👤 ${esc(it.assignee)} `:''}${it.deadline?`📅 ${esc(it.deadline)}`:''}` +`</div>`:''}</div></div>`}).join('');
+}
+
+function renderTabSchedule(m,sum){
+  const el=document.getElementById('tabSchedule');
+  if(!sum?.schedules?.length){el.innerHTML=`<div class="empty"><div class="empty-icon">📅</div><div class="empty-title">추출된 일정이 없어요</div><div class="empty-sub">${m.summaryStatus==='done'?'이 회의에서 일정이 언급되지 않았어요':'요약 완료 후 표시돼요'}</div></div>`;return}
+  el.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:12px">AI가 추출한 일정 후보 · 확인 후 캘린더에 추가하세요</div>`+sum.schedules.map((s,i)=>{const it=typeof s==='string'?{title:s,date:'',time:'',attendees:'',originalText:''}:s;const encS=encodeURIComponent(JSON.stringify(it));const encT=encodeURIComponent(m.title);return`<div class="cal-item"><div class="cal-title">📅 ${esc(it.title)}</div>${it.date||it.time?`<div class="cal-time">${esc(it.date)}${it.time?' '+esc(it.time):''}${it.attendees?' · '+esc(it.attendees):''}</div>`:''} ${it.originalText?`<div class="cal-quote">"${esc(it.originalText)}"</div>`:''}<button class="btn sm ghost" onclick="addCal('${encS}','${encT}')">📆 Google Calendar에 추가</button></div>`}).join('');
+}
+function addCal(encS,encT){
+  try{const s=JSON.parse(decodeURIComponent(encS));const t=encodeURIComponent(s.title||'');const d=encodeURIComponent(`회의: ${decodeURIComponent(encT)}\n${s.originalText?'원문: '+s.originalText:''}`);window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${t}&details=${d}`,'_blank')}
+  catch(e){window.open('https://calendar.google.com','_blank')}
+}
+window.addCal=addCal;
+
+function renderTabShare(m,tr,sum){
+  const el=document.getElementById('tabShare');
+  const cfg=getCfg();
+  el.innerHTML=`
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">회의록을 내보내거나 공유하세요</div>
+    <button class="btn full" onclick="copyNotion('${m.id}')">📓 노션에 붙여넣기용 복사</button>
+    <button class="btn full" onclick="copyMd('${m.id}')">📋 마크다운 복사</button>
+    <button class="btn full" onclick="dlAudio('${m.id}','${esc(m.title)}')">⬇️ 녹음 파일 다운로드</button>
+    ${cfg.webhookUrl?`<button class="btn full primary" onclick="sendWebhook('${m.id}')">🚀 Make.com → 노션 전송</button>`:`<div style="padding:12px;background:#f3f4f6;border-radius:10px;font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px">설정에서 Make.com 웹훅을 설정하면 자동 저장 가능</div>`}
+    ${!sum?`<div style="padding:12px;background:#fef3c7;border-radius:10px;font-size:12px;color:#92400e;margin-top:4px">⚠️ 요약이 완료된 후 전체 내용을 공유할 수 있어요</div>`:''}`;
+}
+window.copyNotion=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('복사됐어요! 노션에 붙여넣기 하세요 📓')};
+window.copyMd=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('마크다운 복사됐어요!')};
+window.sendWebhook=async id=>{
+  const cfg=getCfg();if(!cfg.webhookUrl){toast('Make.com 웹훅 URL을 설정해주세요.');return}
+  const [m,sum]=await Promise.all([dbGet('meetings',id),dbGet('summaries',id)]);
+  try{await fetch(cfg.webhookUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meeting:{title:m.title,date:fmtDate(m.createdAt),duration:fmtDur(m.duration||0)},summary:sum})});toast('노션으로 전송됐어요! 📓')}
+  catch(e){toast('전송 실패. 웹훅 URL을 확인해주세요.')}
+};
+
+async function buildMd(id){
+  const [m,tr,sum]=await Promise.all([dbGet('meetings',id),dbGet('transcripts',id),dbGet('summaries',id)]);
+  let md=`# 회의록\n\n## 회의 정보\n- 회의 제목: ${m.title}\n- 날짜: ${fmtDate(m.createdAt)}\n- 녹음 시간: ${fmtDur(m.duration||0)}\n${m.memo?`- 메모: ${m.memo}\n`:''}\n`;
+  if(sum){
+    if(sum.fullSummary)md+=`## 전체 요약\n${sum.fullSummary}\n\n`;
+    if(sum.discussions?.length)md+=`## 주요 논의 내용\n${sum.discussions.map(d=>`- ${d}`).join('\n')}\n\n`;
+    if(sum.decisions?.length)md+=`## 결정사항\n${sum.decisions.map(d=>`- ${d}`).join('\n')}\n\n`;
+    if(sum.actionItems?.length){md+=`## 할 일\n| 담당자 | 할 일 | 마감일 | 상태 |\n|---|---|---|---|\n`;sum.actionItems.forEach(a=>{const it=typeof a==='string'?{text:a,assignee:'',deadline:''}:a;md+=`| ${it.assignee||''} | ${it.text} | ${it.deadline||''} | ☐ |\n`});md+='\n'}
+    if(sum.schedules?.length){md+=`## 일정 후보\n| 일정명 | 날짜 | 시간 | 참석자 |\n|---|---|---|---|\n`;sum.schedules.forEach(s=>{const it=typeof s==='string'?{title:s,date:'',time:'',attendees:''}:s;md+=`| ${it.title||''} | ${it.date||''} | ${it.time||''} | ${it.attendees||''} |\n`});md+='\n'}
+    if(sum.issues?.length)md+=`## 미해결 이슈\n${sum.issues.map(d=>`- ${d}`).join('\n')}\n\n`;
+    if(sum.flagged?.length)md+=`## 확인이 필요한 발언\n${sum.flagged.map(d=>`- ${d}`).join('\n')}\n\n`;
+    if(sum.keywords?.length)md+=`## 핵심 키워드\n${sum.keywords.join(', ')}\n\n`;
+  }
+  if(tr?.text)md+=`## 전사본\n${tr.text}\n`;
+  return md;
+}
+
+/* ── 삭제 ── */
+document.getElementById('deleteBtn').onclick=async()=>{
+  if(!confirm('이 회의를 삭제할까요? 녹음 파일도 함께 삭제됩니다.'))return;
+  await Promise.all([dbDel('meetings',curMeetingId),dbDel('audio',curMeetingId),dbDel('transcripts',curMeetingId),dbDel('summaries',curMeetingId)]);
+  toast('삭제됐어요.');showScreen('homeScreen');
+};
+
+/* ── 재시도 ── */
+window.retryTr=async id=>{
+  const m=await dbGet('meetings',id);if(!m)return;
+  m.transcriptStatus='none';m.summaryStatus='none';await dbPut('meetings',m);
+  renderDetailTabs(m);startTranscription(id);
+};
+
+/* ── 탭 ── */
+document.querySelectorAll('.tab-item').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab${btn.dataset.tab}`).classList.add('active');
+  };
+});
+
+/* ── 설정 ── */
+function loadSettings(){const cfg=getCfg();document.getElementById('groqKeyInput').value=cfg.groqKey||'';document.getElementById('webhookInput').value=cfg.webhookUrl||''}
+document.getElementById('saveSettingsBtn').onclick=()=>{saveCfg({groqKey:document.getElementById('groqKeyInput').value.trim(),webhookUrl:document.getElementById('webhookInput').value.trim()});toast('설정이 저장됐어요!')}
+
+/* ── PWA ── */
+if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+/* ── 시작 ── */
+setupViz();loadSettings();
+openDB().then(()=>renderHome());
+</script>
+</body>
+</html>
