@@ -10,16 +10,12 @@ function para(c) { return { object: 'block', type: 'paragraph', paragraph: { ric
 function bullet(c) { return { object: 'block', type: 'bulleted_list_item', bulleted_list_item: { rich_text: txt(c) } } }
 function todo(c) { return { object: 'block', type: 'to_do', to_do: { rich_text: txt(c), checked: false } } }
 
-export async function onRequestOptions() {
-  return new Response(null, { headers: CORS });
-}
-
-export async function onRequestPost(context) {
-  const NOTION_TOKEN = context.env.NOTION_TOKEN;
-  const NOTION_DB = context.env.NOTION_DB;
+async function handleNotion(request, env) {
+  const NOTION_TOKEN = env.NOTION_TOKEN;
+  const NOTION_DB = env.NOTION_DB;
 
   try {
-    const { meeting, summary } = await context.request.json();
+    const { meeting, summary } = await request.json();
     const blocks = [];
 
     if (summary?.fullSummary) { blocks.push(h2('📋 전체 요약')); blocks.push(para(summary.fullSummary)) }
@@ -65,3 +61,16 @@ export async function onRequestPost(context) {
     });
   }
 }
+
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+
+    if (url.pathname === '/notion') {
+      if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
+      if (request.method === 'POST') return handleNotion(request, env);
+    }
+
+    return new Response('Not found', { status: 404 });
+  },
+};
