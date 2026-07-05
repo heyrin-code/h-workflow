@@ -270,9 +270,9 @@
       <div class="sg">
         <div class="sg-label">Notion 자동 저장</div>
         <div class="srow">
-          <div class="srow-title">Make.com 웹훅 URL</div>
-          <div class="srow-desc">Make.com에서 시나리오 설정 후 웹훅 URL 입력 → 요약 완료 시 자동으로 노션에 저장</div>
-          <input type="url" id="webhookInput" placeholder="https://hook.eu2.make.com/...">
+          <div class="srow-title">Cloudflare Worker URL</div>
+          <div class="srow-desc">Cloudflare Worker 배포 후 URL 입력 → 요약 완료 시 자동으로 노션에 저장</div>
+          <input type="url" id="webhookInput" placeholder="https://h-workflow-notion.xxx.workers.dev">
         </div>
       </div>
       <button class="btn primary full" id="saveSettingsBtn" style="margin-bottom:14px">저장</button>
@@ -633,13 +633,13 @@ function renderTabShare(m,tr,sum){
     <button class="btn full" onclick="copyNotion('${m.id}')">📓 노션에 붙여넣기용 복사</button>
     <button class="btn full" onclick="copyMd('${m.id}')">📋 마크다운 복사</button>
     <button class="btn full" onclick="dlAudio('${m.id}','${esc(m.title)}')">⬇️ 녹음 파일 다운로드</button>
-    ${cfg.webhookUrl?`<button class="btn full primary" onclick="sendWebhook('${m.id}')">🚀 Make.com → 노션 전송</button>`:`<div style="padding:12px;background:#f3f4f6;border-radius:10px;font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px">설정에서 Make.com 웹훅을 설정하면 자동 저장 가능</div>`}
+    ${cfg.webhookUrl?`<button class="btn full primary" onclick="sendWebhook('${m.id}')">📓 노션으로 전송</button>`:`<div style="padding:12px;background:#f3f4f6;border-radius:10px;font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px">설정에서 Cloudflare Worker URL을 입력하면 자동 저장 가능</div>`}
     ${!sum?`<div style="padding:12px;background:#fef3c7;border-radius:10px;font-size:12px;color:#92400e;margin-top:8px">⚠️ 요약 완료 후 전체 내용을 공유할 수 있어요</div>`:''}`;
 }
 window.copyNotion=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('복사됐어요! 노션에 붙여넣기 하세요 📓')};
 window.copyMd=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('마크다운 복사됐어요!')};
 window.sendWebhook=async id=>{
-  const cfg=getCfg();if(!cfg.webhookUrl){toast('Make.com 웹훅 URL을 설정해주세요.');return}
+  const cfg=getCfg();if(!cfg.webhookUrl){toast('설정에서 Cloudflare Worker URL을 입력해주세요.');return}
   const [m,sum]=await Promise.all([dbGet('meetings',id),dbGet('summaries',id)]);
   try{await fetch(cfg.webhookUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meeting:{title:m.title,date:fmtDate(m.createdAt),duration:fmtDur(m.duration||0)},summary:sum})});toast('노션으로 전송됐어요! 📓')}
   catch(e){toast('전송 실패. 웹훅 URL을 확인해주세요.')}
