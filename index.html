@@ -333,7 +333,7 @@ function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 /* ── Notion 직접 저장 ── */
 const _NDB='3947be32-0d7d-8063-8d3b-e4f3fc9e2dfc';
 const _NT=()=>atob('bnRuXzMzMjU1NzIyMzY1YWNKQ0drV3d3dmQ2eWNTV0tLVzR5M2s5MnJYeFdMUWRkeTQ=');
-const _NPROXY='https://corsproxy.io/?url=';
+const _NPROXY='https://proxy.cors.sh/';
 
 function _str(v){if(Array.isArray(v))return v.map(x=>typeof x==='string'?x:x.text||JSON.stringify(x)).join('\n');return String(v||'')}
 function _rtxt(s){return[{type:'text',text:{content:String(s||'').slice(0,2000)}}]}
@@ -359,7 +359,7 @@ async function sendToNotion(meetingId){
       ...(sum.keywords?.length?[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:`🔑 키워드: ${[].concat(sum.keywords).join(', ')}`}}]}}]:[])
     ]
   };
-  const res=await fetch(_NPROXY+encodeURIComponent('https://api.notion.com/v1/pages'),{
+  const res=await fetch(_NPROXY+'https://api.notion.com/v1/pages',{
     method:'POST',
     headers:{'Authorization':'Bearer '+_NT(),'Notion-Version':'2022-06-28','Content-Type':'application/json'},
     body:JSON.stringify(body)
