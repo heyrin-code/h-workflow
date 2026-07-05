@@ -327,7 +327,47 @@ function toast(m,d=3000){const el=document.getElementById('toast');el.textConten
 function fmtDur(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=Math.floor(s%60);return h?`${h}:${p(m)}:${p(ss)}`:`${p(m)}:${p(ss)}`}
 function p(n){return String(n).padStart(2,'0')}
 function fmtDate(ts){const d=new Date(ts);return`${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}. ${'일월화수목금토'[d.getDay()]}요일`}
+function isoDate(ts){const d=new Date(ts);return`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`}
 function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+
+/* ── Notion 직접 저장 ── */
+const _NDB='3947be32-0d7d-8063-8d3b-e4f3fc9e2dfc';
+const _NT=()=>atob('bnRuXzMzMjU1NzIyMzY1YWNKQ0drV3d3dmQ2eWNTV0tLVzR5M2s5MnJYeFdMUWRkeTQ=');
+const _NPROXY='https://corsproxy.io/?url=';
+
+function _str(v){if(Array.isArray(v))return v.map(x=>typeof x==='string'?x:x.text||JSON.stringify(x)).join('\n');return String(v||'')}
+function _rtxt(s){return[{type:'text',text:{content:String(s||'').slice(0,2000)}}]}
+
+async function sendToNotion(meetingId){
+  const [m,sum]=await Promise.all([dbGet('meetings',meetingId),dbGet('summaries',meetingId)]);
+  if(!sum){toast('요약 데이터가 없어요.');return}
+  const title=`${m.title} - ${isoDate(m.createdAt)} (${fmtDur(m.duration||0)})`;
+  const body={
+    parent:{database_id:_NDB},
+    properties:{
+      '참석자':{title:[{text:{content:title.slice(0,2000)}}]},
+      '안건 요약':{rich_text:_rtxt(sum.fullSummary)},
+      '결정 사항':{rich_text:_rtxt(_str(sum.decisions))},
+      '해야할 일':{rich_text:_rtxt(_str(sum.actionItems))},
+      '날짜':{date:{start:isoDate(m.createdAt)}}
+    },
+    children:[
+      {object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:'📋 전체 요약'},annotations:{bold:true}}]}},
+      {object:'block',type:'paragraph',paragraph:{rich_text:_rtxt(sum.fullSummary)}},
+      ...(sum.decisions?.length?[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:'✅ 결정사항'},annotations:{bold:true}}]}},...[].concat(sum.decisions).map(d=>({object:'block',type:'paragraph',paragraph:{rich_text:_rtxt(typeof d==='string'?d:d.content||JSON.stringify(d))}}))]:[] ),
+      ...(sum.actionItems?.length?[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:'📌 할 일'},annotations:{bold:true}}]}},...[].concat(sum.actionItems).map(a=>({object:'block',type:'paragraph',paragraph:{rich_text:_rtxt(typeof a==='string'?a:`${a.text||''}${a.assignee?` (${a.assignee})`:''}${a.deadline?` - ${a.deadline}까지`:''}`)}}))]:[] ),
+      ...(sum.keywords?.length?[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:`🔑 키워드: ${[].concat(sum.keywords).join(', ')}`}}]}}]:[])
+    ]
+  };
+  const res=await fetch(_NPROXY+encodeURIComponent('https://api.notion.com/v1/pages'),{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+_NT(),'Notion-Version':'2022-06-28','Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+  const data=await res.json();
+  if(data.object==='error')throw new Error(data.message);
+  return data.url;
+}
 
 /* ── 네비게이션 ── */
 let curScreen='homeScreen', curMeetingId=null;
@@ -535,11 +575,7 @@ async function startSummarization(meetingId,transcriptText){
     meeting.summaryStatus='done';await dbPut('meetings',meeting);
     if(curMeetingId===meetingId){renderDetailTabs(meeting);toast('요약 완료! 📋')}
     renderHome();
-    const cfg=getCfg();
-    if(cfg.webhookUrl){
-      fetch(cfg.webhookUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meeting:{title:meeting.title,date:fmtDate(meeting.createdAt),duration:fmtDur(meeting.duration||0)},summary})})
-        .then(()=>toast('노션에 자동 저장됐어요! 📓')).catch(()=>{});
-    }
+    sendToNotion(meetingId).then(()=>toast('노션에 자동 저장됐어요! 📓')).catch(()=>{});
   }catch(e){meeting.summaryStatus='error';await dbPut('meetings',meeting);toast(`요약 실패: ${e.message}`);if(curMeetingId===meetingId)renderDetailTabs(meeting);renderHome()}
 }
 
@@ -630,19 +666,25 @@ function renderTabShare(m,tr,sum){
   el.innerHTML=`
     <div style="font-size:13px;color:var(--muted);margin-bottom:14px">회의록을 내보내거나 공유하세요</div>
     ${driveSection}
+    ${sum?`<button class="btn full primary" id="notionBtn_${m.id}" onclick="handleSendNotion('${m.id}')">📓 노션으로 전송</button>`:''}
     <button class="btn full" onclick="copyNotion('${m.id}')">📓 노션에 붙여넣기용 복사</button>
     <button class="btn full" onclick="copyMd('${m.id}')">📋 마크다운 복사</button>
     <button class="btn full" onclick="dlAudio('${m.id}','${esc(m.title)}')">⬇️ 녹음 파일 다운로드</button>
-    ${cfg.webhookUrl?`<button class="btn full primary" onclick="sendWebhook('${m.id}')">📓 노션으로 전송</button>`:`<div style="padding:12px;background:#f3f4f6;border-radius:10px;font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px">설정에서 Cloudflare Worker URL을 입력하면 자동 저장 가능</div>`}
-    ${!sum?`<div style="padding:12px;background:#fef3c7;border-radius:10px;font-size:12px;color:#92400e;margin-top:8px">⚠️ 요약 완료 후 전체 내용을 공유할 수 있어요</div>`:''}`;
+    ${!sum?`<div style="padding:12px;background:#fef3c7;border-radius:10px;font-size:12px;color:#92400e;margin-top:8px">⚠️ 요약 완료 후 노션으로 전송할 수 있어요</div>`:''}`;
 }
 window.copyNotion=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('복사됐어요! 노션에 붙여넣기 하세요 📓')};
 window.copyMd=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('마크다운 복사됐어요!')};
-window.sendWebhook=async id=>{
-  const cfg=getCfg();if(!cfg.webhookUrl){toast('설정에서 Cloudflare Worker URL을 입력해주세요.');return}
-  const [m,sum]=await Promise.all([dbGet('meetings',id),dbGet('summaries',id)]);
-  try{await fetch(cfg.webhookUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({meeting:{title:m.title,date:fmtDate(m.createdAt),duration:fmtDur(m.duration||0)},summary:sum})});toast('노션으로 전송됐어요! 📓')}
-  catch(e){toast('전송 실패. 웹훅 URL을 확인해주세요.')}
+window.handleSendNotion=async id=>{
+  const btn=document.getElementById('notionBtn_'+id);
+  if(btn){btn.textContent='전송 중...';btn.disabled=true;}
+  try{
+    const url=await sendToNotion(id);
+    toast('노션에 저장됐어요! 📓');
+    if(btn&&url){btn.textContent='✅ 노션 열기';btn.disabled=false;btn.onclick=()=>window.open(url,'_blank');}
+  }catch(e){
+    toast('노션 전송 실패: '+e.message);
+    if(btn){btn.textContent='📓 노션으로 전송';btn.disabled=false;}
+  }
 };
 
 async function buildMd(id){
