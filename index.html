@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="H-WORKFLOW">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root{--p:#7c3aed;--p2:#f5f3ff;--p3:#ede9fe;--ink:#1e1b4b;--muted:#6b7280;--line:#e5e7eb;--bg:#f9fafb;--white:#fff;--red:#ef4444;--green:#22c55e;--shadow:0 4px 24px rgba(124,58,237,.12)}
     *{box-sizing:border-box}
@@ -150,6 +151,9 @@
     .divider{display:flex;align-items:center;gap:10px;margin:14px 0;font-size:12px;color:var(--muted)}
     .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
 
+    .badge.drive{background:#e8f5e9;color:#2e7d32}
+    .drive-progress{margin-top:10px;display:none}
+    .drive-progress.show{display:block}
     @media(max-width:380px){.rec-timer{font-size:42px}.rbtn.main{width:68px;height:68px}}
   </style>
 </head>
@@ -256,6 +260,14 @@
         </div>
       </div>
       <div class="sg">
+        <div class="sg-label">Google Drive 저장</div>
+        <div class="srow">
+          <div class="srow-title">Google OAuth Client ID</div>
+          <div class="srow-desc">Google Cloud Console → API 및 서비스 → 사용자 인증 정보 → OAuth 2.0 클라이언트 ID (웹 애플리케이션) 생성 후 입력. 승인된 자바스크립트 원본에 <b>https://heyrin-code.github.io</b> 추가 필요.</div>
+          <input type="text" id="googleClientIdInput" placeholder="xxxxxxxxxxxx.apps.googleusercontent.com" autocomplete="off">
+        </div>
+      </div>
+      <div class="sg">
         <div class="sg-label">Notion 자동 저장</div>
         <div class="srow">
           <div class="srow-title">Make.com 웹훅 URL</div>
@@ -347,6 +359,7 @@ async function renderHome(){
         <div class="m-badges">
           <span class="badge ${m.transcriptStatus==='done'?'done':m.transcriptStatus==='processing'?'pending':m.transcriptStatus==='error'?'err':'none'}">전사 ${m.transcriptStatus==='done'?'✓':m.transcriptStatus==='processing'?'중...':m.transcriptStatus==='error'?'오류':'—'}</span>
           <span class="badge ${m.summaryStatus==='done'?'done':m.summaryStatus==='processing'?'pending':m.summaryStatus==='error'?'err':'none'}">요약 ${m.summaryStatus==='done'?'✓':m.summaryStatus==='processing'?'중...':m.summaryStatus==='error'?'오류':'—'}</span>
+          ${m.driveFileId?`<span class="badge drive">📁 Drive</span>`:''}
         </div>
       </div>
     </div>`).join('');
@@ -604,13 +617,23 @@ window.addCal=addCal;
 function renderTabShare(m,tr,sum){
   const el=document.getElementById('tabShare');
   const cfg=getCfg();
+  const driveSection=cfg.googleClientId
+    ? m.driveLink
+      ? `<div style="padding:12px 14px;background:#e8f5e9;border-radius:10px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+           <div><div style="font-size:13px;font-weight:700;color:#2e7d32">✅ Google Drive 저장됨</div><div style="font-size:11px;color:#388e3c;margin-top:2px">H-WORKFLOW 폴더</div></div>
+           <button class="btn sm" onclick="openDriveFile('${m.driveLink}')">열기 →</button>
+         </div>`
+      : `<button class="btn full" style="border-color:#4caf50;color:#2e7d32;margin-bottom:10px" onclick="saveToDrive('${m.id}')">📁 Google Drive에 저장</button>
+         <div class="drive-progress" id="driveProgress${m.id}"></div>`
+    : `<div style="padding:12px;background:#f3f4f6;border-radius:10px;font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px">설정에서 Google Client ID를 입력하면 Drive 저장 가능</div>`;
   el.innerHTML=`
-    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">회의록을 내보내거나 공유하세요</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px">회의록을 내보내거나 공유하세요</div>
+    ${driveSection}
     <button class="btn full" onclick="copyNotion('${m.id}')">📓 노션에 붙여넣기용 복사</button>
     <button class="btn full" onclick="copyMd('${m.id}')">📋 마크다운 복사</button>
     <button class="btn full" onclick="dlAudio('${m.id}','${esc(m.title)}')">⬇️ 녹음 파일 다운로드</button>
     ${cfg.webhookUrl?`<button class="btn full primary" onclick="sendWebhook('${m.id}')">🚀 Make.com → 노션 전송</button>`:`<div style="padding:12px;background:#f3f4f6;border-radius:10px;font-size:12px;color:var(--muted);text-align:center;margin-bottom:10px">설정에서 Make.com 웹훅을 설정하면 자동 저장 가능</div>`}
-    ${!sum?`<div style="padding:12px;background:#fef3c7;border-radius:10px;font-size:12px;color:#92400e;margin-top:4px">⚠️ 요약이 완료된 후 전체 내용을 공유할 수 있어요</div>`:''}`;
+    ${!sum?`<div style="padding:12px;background:#fef3c7;border-radius:10px;font-size:12px;color:#92400e;margin-top:8px">⚠️ 요약 완료 후 전체 내용을 공유할 수 있어요</div>`:''}`;
 }
 window.copyNotion=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('복사됐어요! 노션에 붙여넣기 하세요 📓')};
 window.copyMd=async id=>{const md=await buildMd(id);try{await navigator.clipboard.writeText(md)}catch(e){}toast('마크다운 복사됐어요!')};
@@ -663,8 +686,94 @@ document.querySelectorAll('.tab-item').forEach(btn=>{
 });
 
 /* ── 설정 ── */
-function loadSettings(){const cfg=getCfg();document.getElementById('groqKeyInput').value=cfg.groqKey||'';document.getElementById('webhookInput').value=cfg.webhookUrl||''}
-document.getElementById('saveSettingsBtn').onclick=()=>{saveCfg({groqKey:document.getElementById('groqKeyInput').value.trim(),webhookUrl:document.getElementById('webhookInput').value.trim()});toast('설정이 저장됐어요!')}
+function loadSettings(){const cfg=getCfg();document.getElementById('groqKeyInput').value=cfg.groqKey||'';document.getElementById('webhookInput').value=cfg.webhookUrl||'';document.getElementById('googleClientIdInput').value=cfg.googleClientId||''}
+document.getElementById('saveSettingsBtn').onclick=()=>{
+  saveCfg({groqKey:document.getElementById('groqKeyInput').value.trim(),webhookUrl:document.getElementById('webhookInput').value.trim(),googleClientId:document.getElementById('googleClientIdInput').value.trim()});
+  gTokenClient=null;gToken=null;DRIVE_FOLDER_ID=null; // reset on save
+  toast('설정이 저장됐어요!');
+}
+
+/* ── Google Drive ── */
+let gToken=null, gTokenClient=null, DRIVE_FOLDER_ID=null;
+
+function initGDrive(){
+  const cfg=getCfg();
+  if(!cfg.googleClientId||typeof google==='undefined')return false;
+  if(!gTokenClient){
+    gTokenClient=google.accounts.oauth2.initTokenClient({
+      client_id:cfg.googleClientId,
+      scope:'https://www.googleapis.com/auth/drive.file',
+      callback:()=>{}
+    });
+  }
+  return true;
+}
+
+function getGToken(){
+  return new Promise((resolve,reject)=>{
+    if(!initGDrive()){reject(new Error('설정에서 Google Client ID를 입력해주세요.'));return}
+    gTokenClient.callback=(res)=>{
+      if(res.error){reject(new Error('Google 로그인 실패: '+res.error));return}
+      gToken=res.access_token;resolve(gToken);
+    };
+    gTokenClient.requestAccessToken({prompt:gToken?'':'consent'});
+  });
+}
+
+async function getOrCreateFolder(token){
+  if(DRIVE_FOLDER_ID)return DRIVE_FOLDER_ID;
+  const q=encodeURIComponent("name='H-WORKFLOW' and mimeType='application/vnd.google-apps.folder' and trashed=false");
+  const r=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`,{headers:{Authorization:`Bearer ${token}`}});
+  const d=await r.json();
+  if(d.files?.length){DRIVE_FOLDER_ID=d.files[0].id;return DRIVE_FOLDER_ID}
+  const cr=await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+    body:JSON.stringify({name:'H-WORKFLOW',mimeType:'application/vnd.google-apps.folder'})
+  });
+  const cd=await cr.json();
+  DRIVE_FOLDER_ID=cd.id;return DRIVE_FOLDER_ID;
+}
+
+async function uploadToDrive(meetingId,onProgress){
+  const [meeting,audioData]=await Promise.all([dbGet('meetings',meetingId),dbGet('audio',meetingId)]);
+  if(!audioData)throw new Error('녹음 파일이 없어요.');
+  const token=await getGToken();
+  const ext=audioData.mimeType?.includes('m4a')?'m4a':audioData.mimeType?.includes('ogg')?'ogg':audioData.mimeType?.includes('wav')?'wav':'webm';
+  const dateStr=new Date(meeting.createdAt).toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+  const filename=`[H-WORKFLOW] ${meeting.title} ${dateStr}.${ext}`;
+  onProgress?.('Google Drive 폴더 확인 중...');
+  const folderId=await getOrCreateFolder(token);
+  onProgress?.('파일 업로드 중...');
+  const meta={name:filename,mimeType:audioData.mimeType||'audio/webm',parents:[folderId]};
+  const form=new FormData();
+  form.append('metadata',new Blob([JSON.stringify(meta)],{type:'application/json'}));
+  form.append('file',audioData.blob);
+  const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink,name',{
+    method:'POST',headers:{Authorization:`Bearer ${token}`},body:form
+  });
+  const data=await res.json();
+  if(data.error)throw new Error(data.error.message);
+  meeting.driveFileId=data.id;meeting.driveLink=data.webViewLink;
+  await dbPut('meetings',meeting);
+  return data;
+}
+
+window.saveToDrive=async(meetingId)=>{
+  const progEl=document.getElementById('driveProgress'+meetingId);
+  try{
+    if(progEl){progEl.classList.add('show');progEl.textContent='⏳ Google 로그인 중...'}
+    const result=await uploadToDrive(meetingId,(msg)=>{if(progEl)progEl.textContent='⏳ '+msg});
+    toast('Google Drive에 저장됐어요! 📁');
+    if(progEl){progEl.textContent='✅ Drive에 저장됨';setTimeout(()=>progEl.classList.remove('show'),3000)}
+    const meeting=await dbGet('meetings',meetingId);
+    renderDetailTabs(meeting);renderHome();
+  }catch(e){
+    toast('Drive 저장 실패: '+e.message);
+    if(progEl){progEl.textContent='❌ '+e.message;setTimeout(()=>progEl.classList.remove('show'),4000)}
+  }
+};
+
+window.openDriveFile=(url)=>window.open(url,'_blank');
 
 /* ── PWA ── */
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
