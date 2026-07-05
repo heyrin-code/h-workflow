@@ -1,7 +1,7 @@
 {
-  "name": "아키노트 - AI 회의록",
-  "short_name": "아키노트",
-  "description": "AI로 회의를 전사하고 요약하는 개인용 앱",
+  "name": "H-WORKFLOW - AI 회의록",
+  "short_name": "H-WORKFLOW",
+  "description": "AI로 회의를 전사하고 요약하는 업무 관리 앱",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#f9fafb",
