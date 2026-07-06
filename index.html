@@ -356,11 +356,26 @@ const _NPROXY='https://proxy.cors.sh/';
 function _str(v){if(Array.isArray(v))return v.map(x=>typeof x==='string'?x:x.text||JSON.stringify(x)).join('\n');return String(v||'')}
 function _rtxt(s){return[{type:'text',text:{content:String(s||'').slice(0,2000)}}]}
 
+async function ensureNotionDBSchema(){
+  const flagKey='archynotes_notion_schema_v2';
+  if(localStorage.getItem(flagKey))return;
+  try{
+    await fetch(_NPROXY+'https://api.notion.com/v1/databases/'+_NDB,{
+      method:'PATCH',
+      headers:{'Authorization':'Bearer '+_NT(),'Notion-Version':'2022-06-28','Content-Type':'application/json'},
+      body:JSON.stringify({properties:{'유형':{select:{options:[{name:'📋 내부 회의',color:'purple'},{name:'🏥 환자 응대',color:'yellow'},{name:'🤝 원온원',color:'pink'}]}}}})
+    });
+    localStorage.setItem(flagKey,'1');
+  }catch(e){}
+}
+
 async function sendToNotion(meetingId){
+  await ensureNotionDBSchema();
   const [m,sum]=await Promise.all([dbGet('meetings',meetingId),dbGet('summaries',meetingId)]);
   if(!sum){toast('요약 데이터가 없어요.');return}
   const title=`${m.title} - ${isoDate(m.createdAt)} (${fmtDur(m.duration||0)})`;
   const mode=m.mode||'meeting';
+  const modeLabel=mode==='patient'?'🏥 환자 응대':mode==='oneonone'?'🤝 원온원':'📋 내부 회의';
   const _pb=(text,bold=false)=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:String(text||'').slice(0,2000)},annotations:bold?{bold:true}:{}}]}});
   const _pArr=(arr)=>[].concat(arr).map(x=>_pb(typeof x==='string'?x:x.text?`${x.text}${x.assignee?` (${x.assignee})`:''}${x.deadline?` - ${x.deadline}까지`:''}`:JSON.stringify(x)));
 
@@ -390,9 +405,10 @@ async function sendToNotion(meetingId){
     parent:{database_id:_NDB},
     properties:{
       '참석자':{title:[{text:{content:title.slice(0,2000)}}]},
+      '유형':{select:{name:modeLabel}},
       '안건 요약':{rich_text:_rtxt(sum.fullSummary)},
-      '결정 사항':{rich_text:_rtxt(mode==='oneonone'?_str(sum.discussions):mode==='patient'?_str(sum.decisions):_str(sum.decisions))},
-      '해야할 일':{rich_text:_rtxt(mode==='oneonone'?_str(sum.actionItems):_str(sum.actionItems))},
+      '결정 사항':{rich_text:_rtxt(mode==='oneonone'?_str(sum.discussions):_str(sum.decisions))},
+      '해야할 일':{rich_text:_rtxt(_str(sum.actionItems))},
       '날짜':{date:{start:isoDate(m.createdAt)}}
     },
     children
