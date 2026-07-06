@@ -360,22 +360,42 @@ async function sendToNotion(meetingId){
   const [m,sum]=await Promise.all([dbGet('meetings',meetingId),dbGet('summaries',meetingId)]);
   if(!sum){toast('요약 데이터가 없어요.');return}
   const title=`${m.title} - ${isoDate(m.createdAt)} (${fmtDur(m.duration||0)})`;
+  const mode=m.mode||'meeting';
+  const _pb=(text,bold=false)=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:String(text||'').slice(0,2000)},annotations:bold?{bold:true}:{}}]}});
+  const _pArr=(arr)=>[].concat(arr).map(x=>_pb(typeof x==='string'?x:x.text?`${x.text}${x.assignee?` (${x.assignee})`:''}${x.deadline?` - ${x.deadline}까지`:''}`:JSON.stringify(x)));
+
+  let children=[_pb('📋 전체 요약',true),_pb(sum.fullSummary)];
+  if(mode==='oneonone'){
+    if(sum.discussions?.length){children.push(_pb('📌 요청사항',true));children.push(..._pArr(sum.discussions))}
+    if(sum.decisions?.length){children.push(_pb('😤 불만사항 / 어려운 점',true));children.push(..._pArr(sum.decisions))}
+    if(sum.actionItems?.length){children.push(_pb('😊 만족사항',true));children.push(..._pArr(sum.actionItems))}
+    if(sum.flagged?.length){children.push(_pb('💬 그 외 메모',true));children.push(..._pArr(sum.flagged))}
+    if(sum.schedules?.length){children.push(_pb('📅 다음 미팅 일정',true));children.push(...sum.schedules.map(s=>_pb(typeof s==='string'?s:`${s.title||''}${s.date?' · '+s.date:''}${s.time?' '+s.time:''}`)))}
+    if(sum.issues?.length){children.push(_pb('❓ 확인 필요',true));children.push(..._pArr(sum.issues))}
+  }else if(mode==='patient'){
+    if(sum.discussions?.length){children.push(_pb('🗣️ 환자/보호자 주요 발언',true));children.push(..._pArr(sum.discussions))}
+    if(sum.decisions?.length){children.push(_pb('💊 안내 및 처치 내용',true));children.push(..._pArr(sum.decisions))}
+    if(sum.actionItems?.length){children.push(_pb('📋 후속 처리사항',true));children.push(..._pArr(sum.actionItems))}
+    if(sum.issues?.length){children.push(_pb('❓ 추가 확인 필요',true));children.push(..._pArr(sum.issues))}
+    if(sum.flagged?.length){children.push(_pb('⚠️ 중요 요청',true));children.push(..._pArr(sum.flagged))}
+  }else{
+    if(sum.decisions?.length){children.push(_pb('✅ 결정사항',true));children.push(..._pArr(sum.decisions))}
+    if(sum.actionItems?.length){children.push(_pb('📌 할 일',true));children.push(..._pArr(sum.actionItems))}
+    if(sum.issues?.length){children.push(_pb('⚠️ 미해결 이슈',true));children.push(..._pArr(sum.issues))}
+    if(sum.flagged?.length){children.push(_pb('🔍 확인이 필요한 발언',true));children.push(..._pArr(sum.flagged))}
+  }
+  if(sum.keywords?.length)children.push(_pb(`🔑 키워드: ${[].concat(sum.keywords).join(', ')}`));
+
   const body={
     parent:{database_id:_NDB},
     properties:{
       '참석자':{title:[{text:{content:title.slice(0,2000)}}]},
       '안건 요약':{rich_text:_rtxt(sum.fullSummary)},
-      '결정 사항':{rich_text:_rtxt(_str(sum.decisions))},
-      '해야할 일':{rich_text:_rtxt(_str(sum.actionItems))},
+      '결정 사항':{rich_text:_rtxt(mode==='oneonone'?_str(sum.discussions):mode==='patient'?_str(sum.decisions):_str(sum.decisions))},
+      '해야할 일':{rich_text:_rtxt(mode==='oneonone'?_str(sum.actionItems):_str(sum.actionItems))},
       '날짜':{date:{start:isoDate(m.createdAt)}}
     },
-    children:[
-      {object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:'📋 전체 요약'},annotations:{bold:true}}]}},
-      {object:'block',type:'paragraph',paragraph:{rich_text:_rtxt(sum.fullSummary)}},
-      ...(sum.decisions?.length?[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:'✅ 결정사항'},annotations:{bold:true}}]}},...[].concat(sum.decisions).map(d=>({object:'block',type:'paragraph',paragraph:{rich_text:_rtxt(typeof d==='string'?d:d.content||JSON.stringify(d))}}))]:[] ),
-      ...(sum.actionItems?.length?[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:'📌 할 일'},annotations:{bold:true}}]}},...[].concat(sum.actionItems).map(a=>({object:'block',type:'paragraph',paragraph:{rich_text:_rtxt(typeof a==='string'?a:`${a.text||''}${a.assignee?` (${a.assignee})`:''}${a.deadline?` - ${a.deadline}까지`:''}`)}}))]:[] ),
-      ...(sum.keywords?.length?[{object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:`🔑 키워드: ${[].concat(sum.keywords).join(', ')}`}}]}}]:[])
-    ]
+    children
   };
   const res=await fetch(_NPROXY+'https://api.notion.com/v1/pages',{
     method:'POST',
