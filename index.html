@@ -401,9 +401,12 @@ async function sendToNotion(meetingId){
   }
   if(sum.keywords?.length)children.push(_pb(`🔑 키워드: ${[].concat(sum.keywords).join(', ')}`));
   if(tr?.text){
-    const txt=tr.text.slice(0,48000);
-    const chunks=[];for(let i=0;i<txt.length;i+=1999)chunks.push(txt.slice(i,i+1999));
-    children.push({object:'block',type:'toggle',toggle:{rich_text:[{type:'text',text:{content:'📄 전사본 (원문)'}}],children:chunks.map(c=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:c}}]}})) }});
+    const segs=tr.segments||[];
+    const lines=segs.length
+      ?segs.map(s=>`[${fmtDur(s.start)}] ${s.text.trim()}`)
+      :tr.text.match(/.{1,150}/g)||[tr.text];
+    const trBlocks=lines.slice(0,90).map(l=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:l.slice(0,1999)}}]}}));
+    children.push({object:'block',type:'toggle',toggle:{rich_text:[{type:'text',text:{content:`📄 전사본 (원문) · ${segs.length||'-'}개 구간`}}],children:trBlocks}});
   }
 
   const body={
