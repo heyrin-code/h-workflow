@@ -152,8 +152,20 @@
     .divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
 
     .badge.drive{background:#e8f5e9;color:#2e7d32}
+    .badge.mode-patient{background:#fef3c7;color:#92400e}
+    .badge.mode-meeting{background:#ede9fe;color:#5b21b6}
     .drive-progress{margin-top:10px;display:none}
     .drive-progress.show{display:block}
+
+    /* Mode toggle */
+    .mode-toggle{display:flex;gap:5px;background:var(--line);border-radius:13px;padding:4px;margin:0 0 16px}
+    .mode-btn{flex:1;border:none;border-radius:9px;padding:10px 8px;font-size:13px;font-weight:700;color:var(--muted);background:none;transition:.2s;cursor:pointer}
+    .mode-btn.active{background:var(--white);color:var(--p);box-shadow:0 2px 8px rgba(0,0,0,.1)}
+
+    /* Patient summary */
+    .patient-dialog{background:#f0fdf4;border-radius:10px;padding:12px 14px;margin-bottom:8px;font-size:14px;line-height:1.65}
+    .patient-label{font-size:11px;font-weight:800;color:#16a34a;margin-bottom:4px}
+
     @media(max-width:380px){.rec-timer{font-size:42px}.rbtn.main{width:68px;height:68px}}
   </style>
 </head>
@@ -182,9 +194,13 @@
       <button class="btn sm primary" id="saveRecBtn" disabled>완료</button>
     </div>
     <div class="content">
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-mode="patient">🏥 환자 응대</button>
+        <button class="mode-btn" data-mode="meeting">📋 내부 회의</button>
+      </div>
       <div class="field">
-        <label>회의 제목</label>
-        <input id="meetTitleInput" type="text" placeholder="예: 7월 팀 미팅">
+        <label id="meetTitleLabel">환자명 / 응대 제목</label>
+        <input id="meetTitleInput" type="text" placeholder="예: 홍길동 환자 초진">
       </div>
       <div class="field">
         <label>메모</label>
@@ -391,19 +407,22 @@ async function renderHome(){
   if(!meetings.length){
     el.innerHTML=`<div class="empty"><div class="empty-icon">🎙️</div><div class="empty-title">회의 기록이 없어요</div><div class="empty-sub">아래 녹음 버튼으로 시작하세요</div></div>`;return;
   }
-  el.innerHTML=meetings.map(m=>`
-    <div class="meeting-item" data-id="${m.id}">
-      <div class="m-icon">🎙️</div>
+  el.innerHTML=meetings.map(m=>{
+    const modeIcon=m.mode==='patient'?'🏥':'📋';
+    const modeBadge=m.mode==='patient'?`<span class="badge mode-patient">🏥 환자</span>`:`<span class="badge mode-meeting">📋 회의</span>`;
+    return`<div class="meeting-item" data-id="${m.id}">
+      <div class="m-icon">${modeIcon}</div>
       <div class="m-meta">
         <div class="m-title">${esc(m.title)}</div>
         <div class="m-date">${fmtDate(m.createdAt)} · ${fmtDur(m.duration||0)}</div>
         <div class="m-badges">
+          ${modeBadge}
           <span class="badge ${m.transcriptStatus==='done'?'done':m.transcriptStatus==='processing'?'pending':m.transcriptStatus==='error'?'err':'none'}">전사 ${m.transcriptStatus==='done'?'✓':m.transcriptStatus==='processing'?'중...':m.transcriptStatus==='error'?'오류':'—'}</span>
           <span class="badge ${m.summaryStatus==='done'?'done':m.summaryStatus==='processing'?'pending':m.summaryStatus==='error'?'err':'none'}">요약 ${m.summaryStatus==='done'?'✓':m.summaryStatus==='processing'?'중...':m.summaryStatus==='error'?'오류':'—'}</span>
           ${m.driveFileId?`<span class="badge drive">📁 Drive</span>`:''}
         </div>
       </div>
-    </div>`).join('');
+    </div>`}).join('');
   el.querySelectorAll('.meeting-item').forEach(el=>el.onclick=()=>openMeeting(el.dataset.id));
 }
 
@@ -484,11 +503,34 @@ document.getElementById('pauseBtn').onclick=pauseRec;
 document.getElementById('stopBtn').onclick=()=>saveMeeting();
 document.getElementById('saveRecBtn').onclick=()=>saveMeeting();
 
+/* ── 모드 토글 ── */
+document.querySelectorAll('.mode-btn').forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode=btn.dataset.mode;
+    const titleInput=document.getElementById('meetTitleInput');
+    const titleLabel=document.getElementById('meetTitleLabel');
+    const recTitle=document.querySelector('#recordScreen .topbar-title');
+    if(mode==='patient'){
+      titleLabel.textContent='환자명 / 응대 제목';
+      titleInput.placeholder='예: 홍길동 환자 초진';
+      if(recTitle)recTitle.textContent='환자 응대 녹음';
+    }else{
+      titleLabel.textContent='회의 제목';
+      titleInput.placeholder='예: 7월 팀 미팅';
+      if(recTitle)recTitle.textContent='새 회의';
+    }
+  };
+});
+
 async function saveMeeting(blob=null){
   if(!blob)blob=await stopRec();
-  const title=document.getElementById('meetTitleInput').value.trim()||`회의 ${new Date().toLocaleDateString('ko-KR')}`;
+  const mode=document.querySelector('.mode-btn.active')?.dataset.mode||'meeting';
+  const defaultTitle=mode==='patient'?`환자 응대 ${new Date().toLocaleDateString('ko-KR')}`:`회의 ${new Date().toLocaleDateString('ko-KR')}`;
+  const title=document.getElementById('meetTitleInput').value.trim()||defaultTitle;
   const memo=document.getElementById('meetMemoInput').value.trim();
-  const meeting={id:genId(),title,memo,createdAt:Date.now(),duration:recSecs,mimeType:blob.type,transcriptStatus:'none',summaryStatus:'none'};
+  const meeting={id:genId(),title,memo,mode,createdAt:Date.now(),duration:recSecs,mimeType:blob.type,transcriptStatus:'none',summaryStatus:'none'};
   await dbPut('meetings',meeting);
   await dbPut('audio',{meetingId:meeting.id,blob,mimeType:blob.type});
   document.getElementById('meetTitleInput').value='';document.getElementById('meetMemoInput').value='';
@@ -519,9 +561,29 @@ async function groqTranscribe(blob,mimeType){
   return await res.json();
 }
 
-async function groqSummarize(text){
+async function groqSummarize(text,mode='meeting'){
   const cfg=getCfg();if(!cfg.groqKey)throw new Error('Groq API 키가 필요해요.');
-  const prompt=`다음 회의 전사본을 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트는 절대 포함하지 마.
+
+  const patientPrompt=`다음 치과 환자 응대 전사본을 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트는 절대 포함하지 마.
+
+전사본:
+${text}
+
+JSON 형식:
+{
+  "fullSummary": "응대 전체 요약 (2-3문장, 환자 상태와 처치 중심)",
+  "discussions": ["환자/보호자 주요 발언 또는 호소 내용1", "환자/보호자 주요 발언2"],
+  "decisions": ["치료 계획 또는 원장님 안내 내용1", "처치 내용2"],
+  "actionItems": [{"text": "후속 처리 또는 당부 사항", "assignee": "담당자 (없으면 빈문자열)", "deadline": "마감일 (없으면 빈문자열)"}],
+  "schedules": [{"title": "다음 예약 또는 재내원 일정", "date": "날짜", "time": "시간 (없으면 빈문자열)", "attendees": "", "originalText": "원문 발언"}],
+  "issues": ["추가 확인이 필요한 사항 또는 미해결 증상"],
+  "flagged": ["환자가 강하게 요청했거나 중요도가 높은 발언"],
+  "keywords": ["증상이나 처치 키워드1", "키워드2", "키워드3"]
+}
+
+주의: 없는 내용은 추측하지 말고 빈 배열([])로 두세요. 환자 이름 등 개인정보가 나오면 그대로 기록하세요.`;
+
+  const meetingPrompt=`다음 회의 전사본을 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트는 절대 포함하지 마.
 
 전사본:
 ${text}
@@ -539,7 +601,11 @@ JSON 형식:
 }
 
 주의: 없는 내용은 추측하지 말고 빈 배열([])로 두세요. 날짜·시간은 원문 기준으로만 적으세요.`;
-  const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${cfg.groqKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],temperature:0.2,response_format:{type:'json_object'}})});
+
+  const model=mode==='patient'?'llama-3.1-8b-instant':'llama-3.3-70b-versatile';
+  const prompt=mode==='patient'?patientPrompt:meetingPrompt;
+
+  const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${cfg.groqKey}`,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,response_format:{type:'json_object'}})});
   if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`요약 실패 (${res.status})`)}
   const data=await res.json();
   return JSON.parse(data.choices[0].message.content);
@@ -570,7 +636,7 @@ async function startSummarization(meetingId,transcriptText){
   meeting.summaryStatus='processing';await dbPut('meetings',meeting);
   if(curMeetingId===meetingId)renderDetailTabs(meeting);renderHome();
   try{
-    const summary=await groqSummarize(transcriptText);
+    const summary=await groqSummarize(transcriptText,meeting.mode||'meeting');
     summary.meetingId=meetingId;await dbPut('summaries',summary);
     meeting.summaryStatus='done';await dbPut('meetings',meeting);
     if(curMeetingId===meetingId){renderDetailTabs(meeting);toast('요약 완료! 📋')}
@@ -605,17 +671,28 @@ function renderTabSummary(m,sum){
     el.innerHTML=`<div class="empty"><div class="empty-icon">📋</div><div class="empty-title">요약이 없어요</div><div class="empty-sub">설정에서 Groq API 키를 입력하면 자동 요약이 시작돼요</div><button class="btn primary" style="margin-top:16px" onclick="retryTr('${m.id}')">전사 & 요약 시작</button></div>`;return;
   }
   const li=arr=>Array.isArray(arr)&&arr.length?`<ul class="sum-list">${arr.map(x=>`<li>${esc(typeof x==='string'?x:x.text||JSON.stringify(x))}</li>`).join('')}</ul>`:'';
-  el.innerHTML=`
-    <div style="margin-bottom:16px;padding:12px 14px;background:var(--p2);border-radius:12px">
-      <div style="font-size:12px;color:var(--muted)">${fmtDate(m.createdAt)} · ${fmtDur(m.duration||0)}</div>
+  const keywords=sum.keywords?.length?`<div class="sum-section"><div class="sum-title">🏷️ 핵심 키워드</div><div style="display:flex;flex-wrap:wrap;gap:6px">${sum.keywords.map(k=>`<span style="background:var(--p3);color:var(--p);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700">${esc(k)}</span>`).join('')}</div></div>`:'';
+  const header=`<div style="margin-bottom:16px;padding:12px 14px;background:var(--p2);border-radius:12px">
+      <div style="font-size:12px;color:var(--muted)">${m.mode==='patient'?'🏥 환자 응대':'📋 내부 회의'} · ${fmtDate(m.createdAt)} · ${fmtDur(m.duration||0)}</div>
       ${m.memo?`<div style="font-size:13px;color:var(--muted);margin-top:4px">${esc(m.memo)}</div>`:''}
-    </div>
+    </div>`;
+  if(m.mode==='patient'){
+    el.innerHTML=header+`
+    ${sum.fullSummary?`<div class="sum-section"><div class="sum-title">📝 응대 요약</div><div class="sum-text">${esc(sum.fullSummary)}</div></div>`:''}
+    ${sum.discussions?.length?`<div class="sum-section"><div class="sum-title">🗣️ 환자/보호자 주요 발언</div>${li(sum.discussions)}</div>`:''}
+    ${sum.decisions?.length?`<div class="sum-section"><div class="sum-title">💊 안내 및 처치 내용</div>${li(sum.decisions)}</div>`:''}
+    ${sum.issues?.length?`<div class="sum-section"><div class="sum-title">❓ 추가 확인 필요 사항</div>${li(sum.issues)}</div>`:''}
+    ${sum.flagged?.length?`<div class="sum-section"><div class="sum-title">⚠️ 중요 요청 / 주의 발언</div>${li(sum.flagged)}</div>`:''}
+    ${keywords}`;
+  }else{
+    el.innerHTML=header+`
     ${sum.fullSummary?`<div class="sum-section"><div class="sum-title">📝 전체 요약</div><div class="sum-text">${esc(sum.fullSummary)}</div></div>`:''}
     ${sum.discussions?.length?`<div class="sum-section"><div class="sum-title">💬 주요 논의 내용</div>${li(sum.discussions)}</div>`:''}
     ${sum.decisions?.length?`<div class="sum-section"><div class="sum-title">✅ 결정사항</div>${li(sum.decisions)}</div>`:''}
     ${sum.issues?.length?`<div class="sum-section"><div class="sum-title">⚠️ 미해결 이슈</div>${li(sum.issues)}</div>`:''}
     ${sum.flagged?.length?`<div class="sum-section"><div class="sum-title">🔍 확인이 필요한 발언</div>${li(sum.flagged)}</div>`:''}
-    ${sum.keywords?.length?`<div class="sum-section"><div class="sum-title">🏷️ 핵심 키워드</div><div style="display:flex;flex-wrap:wrap;gap:6px">${sum.keywords.map(k=>`<span style="background:var(--p3);color:var(--p);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700">${esc(k)}</span>`).join('')}</div></div>`:''}`;
+    ${keywords}`;
+  }
 }
 
 function renderTabTranscript(m,tr){
