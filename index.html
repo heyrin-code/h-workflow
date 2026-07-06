@@ -154,6 +154,7 @@
     .badge.drive{background:#e8f5e9;color:#2e7d32}
     .badge.mode-patient{background:#fef3c7;color:#92400e}
     .badge.mode-meeting{background:#ede9fe;color:#5b21b6}
+    .badge.mode-oneonone{background:#fce7f3;color:#9d174d}
     .drive-progress{margin-top:10px;display:none}
     .drive-progress.show{display:block}
 
@@ -197,6 +198,7 @@
       <div class="mode-toggle">
         <button class="mode-btn active" data-mode="patient">🏥 환자 응대</button>
         <button class="mode-btn" data-mode="meeting">📋 내부 회의</button>
+        <button class="mode-btn" data-mode="oneonone">🤝 원온원</button>
       </div>
       <div class="field">
         <label id="meetTitleLabel">환자명 / 응대 제목</label>
@@ -408,8 +410,8 @@ async function renderHome(){
     el.innerHTML=`<div class="empty"><div class="empty-icon">🎙️</div><div class="empty-title">회의 기록이 없어요</div><div class="empty-sub">아래 녹음 버튼으로 시작하세요</div></div>`;return;
   }
   el.innerHTML=meetings.map(m=>{
-    const modeIcon=m.mode==='patient'?'🏥':'📋';
-    const modeBadge=m.mode==='patient'?`<span class="badge mode-patient">🏥 환자</span>`:`<span class="badge mode-meeting">📋 회의</span>`;
+    const modeIcon=m.mode==='patient'?'🏥':m.mode==='oneonone'?'🤝':'📋';
+    const modeBadge=m.mode==='patient'?`<span class="badge mode-patient">🏥 환자</span>`:m.mode==='oneonone'?`<span class="badge mode-oneonone">🤝 원온원</span>`:`<span class="badge mode-meeting">📋 회의</span>`;
     return`<div class="meeting-item" data-id="${m.id}">
       <div class="m-icon">${modeIcon}</div>
       <div class="m-meta">
@@ -516,6 +518,10 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
       titleLabel.textContent='환자명 / 응대 제목';
       titleInput.placeholder='예: 홍길동 환자 초진';
       if(recTitle)recTitle.textContent='환자 응대 녹음';
+    }else if(mode==='oneonone'){
+      titleLabel.textContent='대화 상대 / 제목';
+      titleInput.placeholder='예: 김직원 월간 1on1';
+      if(recTitle)recTitle.textContent='원온원 녹음';
     }else{
       titleLabel.textContent='회의 제목';
       titleInput.placeholder='예: 7월 팀 미팅';
@@ -527,7 +533,7 @@ document.querySelectorAll('.mode-btn').forEach(btn=>{
 async function saveMeeting(blob=null){
   if(!blob)blob=await stopRec();
   const mode=document.querySelector('.mode-btn.active')?.dataset.mode||'meeting';
-  const defaultTitle=mode==='patient'?`환자 응대 ${new Date().toLocaleDateString('ko-KR')}`:`회의 ${new Date().toLocaleDateString('ko-KR')}`;
+  const defaultTitle=mode==='patient'?`환자 응대 ${new Date().toLocaleDateString('ko-KR')}`:mode==='oneonone'?`원온원 ${new Date().toLocaleDateString('ko-KR')}`:`회의 ${new Date().toLocaleDateString('ko-KR')}`;
   const title=document.getElementById('meetTitleInput').value.trim()||defaultTitle;
   const memo=document.getElementById('meetMemoInput').value.trim();
   const meeting={id:genId(),title,memo,mode,createdAt:Date.now(),duration:recSecs,mimeType:blob.type,transcriptStatus:'none',summaryStatus:'none'};
@@ -602,8 +608,27 @@ JSON 형식:
 
 주의: 없는 내용은 추측하지 말고 빈 배열([])로 두세요. 날짜·시간은 원문 기준으로만 적으세요.`;
 
+  const oneononPrompt=`다음 원온원(1-on-1) 대화 전사본을 분석해서 아래 JSON 형식으로만 응답해줘. 다른 텍스트는 절대 포함하지 마.
+
+전사본:
+${text}
+
+JSON 형식:
+{
+  "fullSummary": "대화 전체 요약 (2-3문장)",
+  "discussions": ["요청사항: 상대방이 요청하거나 필요로 한 내용1", "요청사항2"],
+  "decisions": ["불만사항 또는 어려움: 상대방이 토로한 불만, 힘든 점1", "불만사항2"],
+  "actionItems": [{"text": "만족사항: 긍정적으로 언급한 내용 또는 후속 조치", "assignee": "담당자 (없으면 빈문자열)", "deadline": "마감일 (없으면 빈문자열)"}],
+  "schedules": [{"title": "다음 미팅 일정", "date": "날짜", "time": "시간 (없으면 빈문자열)", "attendees": "", "originalText": "원문 발언"}],
+  "issues": ["확인이 필요한 사항 또는 후속 논의 필요 주제"],
+  "flagged": ["그 외 중요하게 메모할 발언"],
+  "keywords": ["키워드1", "키워드2", "키워드3"]
+}
+
+주의: 없는 내용은 추측하지 말고 빈 배열([])로 두세요.`;
+
   const model=mode==='patient'?'llama-3.1-8b-instant':'llama-3.3-70b-versatile';
-  const prompt=mode==='patient'?patientPrompt:meetingPrompt;
+  const prompt=mode==='patient'?patientPrompt:mode==='oneonone'?oneononPrompt:meetingPrompt;
 
   const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{Authorization:`Bearer ${cfg.groqKey}`,'Content-Type':'application/json'},body:JSON.stringify({model,messages:[{role:'user',content:prompt}],temperature:0.2,response_format:{type:'json_object'}})});
   if(!res.ok){const err=await res.json().catch(()=>({}));throw new Error(err.error?.message||`요약 실패 (${res.status})`)}
@@ -672,11 +697,22 @@ function renderTabSummary(m,sum){
   }
   const li=arr=>Array.isArray(arr)&&arr.length?`<ul class="sum-list">${arr.map(x=>`<li>${esc(typeof x==='string'?x:x.text||JSON.stringify(x))}</li>`).join('')}</ul>`:'';
   const keywords=sum.keywords?.length?`<div class="sum-section"><div class="sum-title">🏷️ 핵심 키워드</div><div style="display:flex;flex-wrap:wrap;gap:6px">${sum.keywords.map(k=>`<span style="background:var(--p3);color:var(--p);border-radius:20px;padding:3px 10px;font-size:12px;font-weight:700">${esc(k)}</span>`).join('')}</div></div>`:'';
+  const modeLabel=m.mode==='patient'?'🏥 환자 응대':m.mode==='oneonone'?'🤝 원온원':'📋 내부 회의';
   const header=`<div style="margin-bottom:16px;padding:12px 14px;background:var(--p2);border-radius:12px">
-      <div style="font-size:12px;color:var(--muted)">${m.mode==='patient'?'🏥 환자 응대':'📋 내부 회의'} · ${fmtDate(m.createdAt)} · ${fmtDur(m.duration||0)}</div>
+      <div style="font-size:12px;color:var(--muted)">${modeLabel} · ${fmtDate(m.createdAt)} · ${fmtDur(m.duration||0)}</div>
       ${m.memo?`<div style="font-size:13px;color:var(--muted);margin-top:4px">${esc(m.memo)}</div>`:''}
     </div>`;
-  if(m.mode==='patient'){
+  if(m.mode==='oneonone'){
+    el.innerHTML=header+`
+    ${sum.fullSummary?`<div class="sum-section"><div class="sum-title">📝 대화 요약</div><div class="sum-text">${esc(sum.fullSummary)}</div></div>`:''}
+    ${sum.discussions?.length?`<div class="sum-section"><div class="sum-title">📌 요청사항</div>${li(sum.discussions)}</div>`:''}
+    ${sum.decisions?.length?`<div class="sum-section"><div class="sum-title">😤 불만사항 / 어려운 점</div>${li(sum.decisions)}</div>`:''}
+    ${sum.actionItems?.length?`<div class="sum-section"><div class="sum-title">😊 만족사항</div>${li(sum.actionItems.map(a=>typeof a==='string'?a:a.text||JSON.stringify(a)))}</div>`:''}
+    ${sum.flagged?.length?`<div class="sum-section"><div class="sum-title">💬 그 외 메모</div>${li(sum.flagged)}</div>`:''}
+    ${sum.schedules?.length?`<div class="sum-section"><div class="sum-title">📅 다음 미팅 일정</div>${li(sum.schedules.map(s=>typeof s==='string'?s:`${s.title||''}${s.date?' · '+s.date:''}${s.time?' '+s.time:''}`))}</div>`:''}
+    ${sum.issues?.length?`<div class="sum-section"><div class="sum-title">❓ 확인 필요</div>${li(sum.issues)}</div>`:''}
+    ${keywords}`;
+  }else if(m.mode==='patient'){
     el.innerHTML=header+`
     ${sum.fullSummary?`<div class="sum-section"><div class="sum-title">📝 응대 요약</div><div class="sum-text">${esc(sum.fullSummary)}</div></div>`:''}
     ${sum.discussions?.length?`<div class="sum-section"><div class="sum-title">🗣️ 환자/보호자 주요 발언</div>${li(sum.discussions)}</div>`:''}
