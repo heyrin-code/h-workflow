@@ -371,7 +371,7 @@ async function ensureNotionDBSchema(){
 
 async function sendToNotion(meetingId){
   await ensureNotionDBSchema();
-  const [m,sum]=await Promise.all([dbGet('meetings',meetingId),dbGet('summaries',meetingId)]);
+  const [m,sum,tr]=await Promise.all([dbGet('meetings',meetingId),dbGet('summaries',meetingId),dbGet('transcripts',meetingId)]);
   if(!sum){toast('요약 데이터가 없어요.');return}
   const title=`${m.title} - ${isoDate(m.createdAt)} (${fmtDur(m.duration||0)})`;
   const mode=m.mode||'meeting';
@@ -400,6 +400,11 @@ async function sendToNotion(meetingId){
     if(sum.flagged?.length){children.push(_pb('🔍 확인이 필요한 발언',true));children.push(..._pArr(sum.flagged))}
   }
   if(sum.keywords?.length)children.push(_pb(`🔑 키워드: ${[].concat(sum.keywords).join(', ')}`));
+  if(tr?.text){
+    const txt=tr.text.slice(0,48000);
+    const chunks=[];for(let i=0;i<txt.length;i+=1999)chunks.push(txt.slice(i,i+1999));
+    children.push({object:'block',type:'toggle',toggle:{rich_text:[{type:'text',text:{content:'📄 전사본 (원문)'}}],children:chunks.map(c=>({object:'block',type:'paragraph',paragraph:{rich_text:[{type:'text',text:{content:c}}]}})) }});
+  }
 
   const body={
     parent:{database_id:_NDB},
