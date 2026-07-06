@@ -158,6 +158,13 @@
     .drive-progress{margin-top:10px;display:none}
     .drive-progress.show{display:block}
 
+    /* Login */
+    .login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;background:var(--bg)}
+    .login-logo{width:88px;height:88px;border-radius:22px;object-fit:cover;margin-bottom:18px;box-shadow:var(--shadow)}
+    .login-title{font-size:24px;font-weight:800;color:var(--p);margin-bottom:6px}
+    .login-sub{font-size:14px;color:var(--muted);margin-bottom:44px;text-align:center}
+    .login-error{color:var(--red);font-size:13px;margin-top:14px;display:none;text-align:center}
+
     /* Mode toggle */
     .mode-toggle{display:flex;gap:5px;background:var(--line);border-radius:13px;padding:4px;margin:0 0 16px}
     .mode-btn{flex:1;border:none;border-radius:9px;padding:10px 8px;font-size:13px;font-weight:700;color:var(--muted);background:none;transition:.2s;cursor:pointer}
@@ -173,8 +180,19 @@
 <body>
 <div class="app">
 
+  <!-- 로그인 화면 -->
+  <div id="loginScreen" class="screen active">
+    <div class="login-screen">
+      <img src="icon-192-cat.png" class="login-logo">
+      <div class="login-title">H-WORKFLOW</div>
+      <div class="login-sub">AI 회의록 · 전사 · 노션 자동 저장<br>구글 계정으로 로그인해주세요</div>
+      <div id="googleSignInBtn"></div>
+      <div class="login-error" id="loginError">접근 권한이 없는 계정이에요 🚫</div>
+    </div>
+  </div>
+
   <!-- 홈 화면 -->
-  <div id="homeScreen" class="screen active">
+  <div id="homeScreen" class="screen">
     <div class="topbar">
       <div class="topbar-title">H-WORKFLOW</div>
       <button class="btn sm" id="homeSettingsBtn">⚙️</button>
@@ -296,6 +314,13 @@
       <button class="btn primary full" id="saveSettingsBtn" style="margin-bottom:14px">저장</button>
       <div style="padding:13px;background:#fef3c7;border-radius:12px;font-size:12px;color:#92400e;line-height:1.6">
         ⚠️ 녹음 파일과 데이터는 이 기기에만 저장돼요. 브라우저 데이터를 삭제하면 사라질 수 있어요.
+      </div>
+      <div id="loginInfoRow" style="margin-top:14px;display:none">
+        <div class="sg-label">계정</div>
+        <div class="srow" style="display:flex;align-items:center;justify-content:space-between">
+          <div><div class="srow-title" id="loginEmailDisplay"></div><div class="srow-desc">로그인됨</div></div>
+          <button class="btn sm danger" id="logoutBtn">로그아웃</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1015,9 +1040,61 @@ window.openDriveFile=(url)=>window.open(url,'_blank');
 /* ── PWA ── */
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 
+/* ── 구글 로그인 ── */
+const _AE=()=>atob('amFuZ3l1LnVqaW5AZ21haWwuY29t');
+const AUTH_KEY='archynotes_auth';
+
+function _parseJwt(token){try{return JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')))}catch(e){return null}}
+
+function isLoggedIn(){return localStorage.getItem(AUTH_KEY)===_AE()}
+
+function handleGoogleCredential(res){
+  const payload=_parseJwt(res.credential);
+  if(payload?.email===_AE()){
+    localStorage.setItem(AUTH_KEY,payload.email);
+    document.getElementById('loginScreen').classList.remove('active');
+    document.getElementById('homeScreen').classList.add('active');
+    showLoginInfo(payload.email);
+    openDB().then(()=>renderHome());
+  }else{
+    const err=document.getElementById('loginError');
+    err.style.display='block';
+    err.textContent=`접근 권한이 없는 계정이에요 🚫 (${payload?.email||''})`;
+  }
+}
+
+function showLoginInfo(email){
+  const row=document.getElementById('loginInfoRow');
+  const disp=document.getElementById('loginEmailDisplay');
+  if(row&&disp){row.style.display='block';disp.textContent=email}
+}
+
+document.getElementById('logoutBtn').onclick=()=>{
+  localStorage.removeItem(AUTH_KEY);
+  document.getElementById('homeScreen').classList.remove('active');
+  document.getElementById('loginScreen').classList.add('active');
+  if(typeof google!=='undefined')google.accounts.id.prompt();
+};
+
+window.handleGoogleCredential=handleGoogleCredential;
+
+function initGoogleAuth(){
+  if(typeof google==='undefined'){setTimeout(initGoogleAuth,300);return}
+  google.accounts.id.initialize({client_id:DEFAULT_GOOGLE_CLIENT_ID,callback:handleGoogleCredential,auto_select:true});
+  google.accounts.id.renderButton(document.getElementById('googleSignInBtn'),{theme:'outline',size:'large',locale:'ko'});
+  if(!isLoggedIn())google.accounts.id.prompt();
+}
+
 /* ── 시작 ── */
 setupViz();loadSettings();
-openDB().then(()=>renderHome());
+
+if(isLoggedIn()){
+  document.getElementById('loginScreen').classList.remove('active');
+  document.getElementById('homeScreen').classList.add('active');
+  showLoginInfo(_AE());
+  openDB().then(()=>renderHome());
+}
+initGoogleAuth();
 </script>
 </body>
 </html>
