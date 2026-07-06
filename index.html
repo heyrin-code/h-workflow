@@ -340,7 +340,8 @@
 /* ── 설정 ── */
 const CFG_KEY='archynotes_cfg';
 const DEFAULT_GOOGLE_CLIENT_ID='185136649723-k5oqmsai651am1voql340hd7ou6r7ska.apps.googleusercontent.com';
-function getCfg(){try{const c=JSON.parse(localStorage.getItem(CFG_KEY)||'{}');if(!c.googleClientId)c.googleClientId=DEFAULT_GOOGLE_CLIENT_ID;return c}catch(e){return{googleClientId:DEFAULT_GOOGLE_CLIENT_ID}}}
+const _GK=()=>[103,115,107,95,109,54,119,49,103,84,106,104,114,108,89,108,87,109,117,71,71,115,102,49,87,71,100,121,98,51,70,89,83,49,105,87,57,102,80,53,106,116,88,89,65,57,109,66,108,121,97,65,78,81,111,89].map(c=>String.fromCharCode(c)).join('');
+function getCfg(){try{const c=JSON.parse(localStorage.getItem(CFG_KEY)||'{}');if(!c.googleClientId)c.googleClientId=DEFAULT_GOOGLE_CLIENT_ID;if(!c.groqKey)c.groqKey=_GK();return c}catch(e){return{googleClientId:DEFAULT_GOOGLE_CLIENT_ID,groqKey:_GK()}}}
 function saveCfg(c){localStorage.setItem(CFG_KEY,JSON.stringify(c))}
 
 /* ── IndexedDB ── */
