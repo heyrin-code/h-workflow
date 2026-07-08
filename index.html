@@ -435,26 +435,31 @@ async function sendToNotion(meetingId){
     children.push({object:'block',type:'toggle',toggle:{rich_text:[{type:'text',text:{content:`📄 전사본 (원문) · ${segs.length||'-'}개 구간`}}],children:trBlocks}});
   }
 
-  const body={
-    parent:{database_id:_NDB},
-    properties:{
-      '참석자':{title:[{text:{content:title.slice(0,2000)}}]},
-      '유형':{select:{name:modeLabel}},
-      '안건 요약':{rich_text:_rtxt(sum.fullSummary)},
-      '결정 사항':{rich_text:_rtxt(mode==='oneonone'?_str(sum.discussions):_str(sum.decisions))},
-      '해야할 일':{rich_text:_rtxt(_str(sum.actionItems))},
-      '날짜':{date:{start:isoDate(m.createdAt)}}
-    },
-    children
+  const baseProps={
+    '참석자':{title:[{text:{content:title.slice(0,2000)}}]},
+    '안건 요약':{rich_text:_rtxt(sum.fullSummary)},
+    '결정 사항':{rich_text:_rtxt(mode==='oneonone'?_str(sum.discussions):_str(sum.decisions))},
+    '해야할 일':{rich_text:_rtxt(_str(sum.actionItems))},
+    '날짜':{date:{start:isoDate(m.createdAt)}}
   };
-  const res=await fetch(_NPROXY+'https://api.notion.com/v1/pages',{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+_NT(),'Notion-Version':'2022-06-28','Content-Type':'application/json'},
-    body:JSON.stringify(body)
-  });
-  const data=await res.json();
-  if(data.object==='error')throw new Error(data.message);
-  return data.url;
+  const _postPage=async(props)=>{
+    const res=await fetch(_NPROXY+'https://api.notion.com/v1/pages',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+_NT(),'Notion-Version':'2022-06-28','Content-Type':'application/json'},
+      body:JSON.stringify({parent:{database_id:_NDB},properties:props,children})
+    });
+    const data=await res.json();
+    if(data.object==='error')throw new Error(data.message);
+    return data.url;
+  };
+  try{
+    return await _postPage({...baseProps,'유형':{select:{name:modeLabel}}});
+  }catch(e){
+    if(e.message?.includes('유형')||e.message?.includes('property')||e.message?.includes('Could not find')){
+      return await _postPage(baseProps);
+    }
+    throw e;
+  }
 }
 
 /* ── 네비게이션 ── */
@@ -773,7 +778,7 @@ async function startSummarization(meetingId,transcriptText){
     meeting.summaryStatus='done';await dbPut('meetings',meeting);
     if(curMeetingId===meetingId){renderDetailTabs(meeting);toast('요약 완료! 📋')}
     renderHome();
-    sendToNotion(meetingId).then(()=>toast('노션에 자동 저장됐어요! 📓')).catch(()=>{});
+    sendToNotion(meetingId).then(()=>toast('노션에 자동 저장됐어요! 📓')).catch(e=>toast('노션 자동 저장 실패: '+e.message));
   }catch(e){meeting.summaryStatus='error';await dbPut('meetings',meeting);toast(`요약 실패: ${e.message}`);if(curMeetingId===meetingId)renderDetailTabs(meeting);renderHome()}
 }
 
